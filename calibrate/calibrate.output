@@ -1,0 +1,2 @@
+
+float yBottomMax = 212.908568445793 + body.zMoy * -0.332923639449663 + pow(body.zMoy,2) * -8.81651485585909e-05 ;
