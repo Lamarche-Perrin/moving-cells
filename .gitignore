@@ -1,0 +1,16 @@
+# C++ and Dev-C++
+*.o
+*.layout
+
+# RStudio
+.RData
+.Rhistory
+
+# Temp files
+*~
+\#*\#
+\*R\*
+*.backup
+
+# Build files
+build
