@@ -58,7 +58,7 @@ const bool reverseXAxis = false;
 const bool thresholdFromFile = false;
 
 const bool allowKinectCalibration = false;
-const bool allowSensorDisplay = true;
+const bool allowSensorDisplay = false;
 const bool allowGraphicsDisplay = true;
 
 
@@ -70,19 +70,19 @@ const bool useSpeed = false;
 const float xSpeedThreshold = 400.;
 
 const int gravitationType = SYMMETRIC_GRAVITATION;
-const float bodyAttractPower = 2.;
-const float bodyRepelPower = 3.;
-const float gravitationFactor = 1;
-const float gravitationRadius = 300;
+const float initialBodyAttractPower = 2.;
+const float initialBodyRepelPower = 3.;
+const float initialGravitationFactor = 1;
+const float initialGravitationRadius = 500;
 const float gravitationSpeedFactor = 0.5;
 
-const int particleNumber = 500000;
-const float particleDamping = 0.02;
+const int particleNumber = 196608*2;
+const float initialParticleDamping = 0.02;
 
-const float particleIntensity = 4;
-const int particleRed = 3;
-const int particleGreen = 7;
-const int particleBlue = 13;
+const float initialParticleIntensity = 12;
+const int particleRed = 15;
+const int particleGreen = 8;
+const int particleBlue = 8;
 
 const int borderType = MIRROR_BORDER;
 const int initType = UNIFORM_INIT;
@@ -141,14 +141,21 @@ const int initType = UNIFORM_INIT;
 
 // KINECT VARIABLES
 
-const int graphicsWidth = 1280;
-const int graphicsHeight = 720;
+const int graphicsWidth = 1024;
+const int graphicsHeight = 768;
 
-const int threadNumber = 6;
+const int threadNumber = 7;
 
 const int depthWidth = 512;
 const int depthHeight = 424;
 const int depthDepth = 400;
+
+float gravitationFactor = initialGravitationFactor;
+float gravitationRadius = initialGravitationRadius;
+float particleIntensity = initialParticleIntensity;
+float particleDamping = initialParticleDamping;
+float bodyAttractPower = initialBodyAttractPower;
+float bodyRepelPower = initialBodyRepelPower;
 
 int bodyCounter;
 bool stopKinect;
@@ -158,6 +165,8 @@ cv::Mat *thresholdFrame;
 BodyList *bodyList;
 BodyList *newBodyList;
 BodyList *currentBodyList;
+
+bool verbose = false;
 
 
 // GRAPHICS VARIABLES
@@ -202,7 +211,7 @@ int lastPixel [threadNumber];
 int main (int argc, char *argv[])
 {
 	std::string program_path (argv[0]);
-	size_t executable_name_idx = program_path.rfind ("moving_cells");
+	size_t executable_name_idx = program_path.rfind ("moving-cells");
 
 	std::string binpath = "/";
 
@@ -365,12 +374,16 @@ int main (int argc, char *argv[])
 		if (allowSensorDisplay) { displaySensor(depthFrame); }
 
 		int key = cv::waitKey(1);
-		if (key > 0) { std::cout << "KINECT KEY PRESSED: " << key << std::endl; }
-		stopKinect = stopKinect || (key > 0 && ((key & 0xFF) == 27));
-		thresholdKinect = thresholdKinect || (key == 1113864);
+		if (key > 0)
+		{
+			key = key & 0xFF;
+			std::cout << "KINECT KEY PRESSED: " << key << std::endl;
 
-		// CALIBRATE KINECT
-		if (key > 0 && allowKinectCalibration) { calibrateKinect(key); }
+			stopKinect = stopKinect || key == 27; // ESC escape
+			thresholdKinect = thresholdKinect || key == 8; // BS backspace
+
+			if (allowKinectCalibration) { calibrateKinect(key); }
+		}
 
 		listener.release(frames);
 		delete depthFrame;
@@ -689,17 +702,11 @@ void setup ()
 	blueColor = new int [particleNumber+1];
 	greenColor = new int [particleNumber+1];
 
-	for (int i = 0; i < particleNumber; i++)
-	{
-		redColor[i] = std::min((int)(i*particleRed*particleIntensity),255);
-		blueColor[i] = std::min((int)(i*particleBlue*particleIntensity),255);
-		greenColor[i] = std::min((int)(i*particleGreen*particleIntensity),255);
-	}
+	setupColor();
 	
 	// SETUP DISPLAY
-	//cv::namedWindow ("window", cv::WINDOW_AUTOSIZE);
-	cv::namedWindow("window", CV_WINDOW_NORMAL);
-	cv::setWindowProperty("window", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
+	cv::namedWindow("moving-cells", CV_WINDOW_NORMAL);
+	cv::setWindowProperty ("moving-cells", CV_WND_PROP_FULLSCREEN, 1);
 	
 	frame = new cv::Mat(graphicsHeight, graphicsWidth, CV_8UC3);
 	pixels = new int [graphicsWidth*graphicsHeight];
@@ -733,6 +740,16 @@ void setup ()
 	delay = 0;
 	sumDelay = 0;
 	gettimeofday(&startTimer, NULL);
+}
+
+void setupColor ()
+{
+	for (int i = 0; i < particleNumber; i++)
+	{
+		redColor[i] = std::min((int)(i*particleRed*particleIntensity),255);
+		blueColor[i] = std::min((int)(i*particleBlue*particleIntensity),255);
+		greenColor[i] = std::min((int)(i*particleGreen*particleIntensity),255);
+	}
 }
 
 
@@ -1041,17 +1058,158 @@ void computeParticles ()
 
 void draw ()
 {
+	if (verbose)
+	{
+		int x = 10;
+		int y = 20;
+		
+		std::stringstream ss;
+		ss << "Radius: " << gravitationRadius;
+		std::string str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Attract: " << bodyAttractPower;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Repel: " << bodyRepelPower;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Intensity: " << particleIntensity;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Damping: " << particleDamping;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Factor: " << gravitationFactor;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+	}
+	
 	//cv::GaussianBlur (*frame, *frame, cv::Size(1,1), 1.5, 1.5);
-	cv::imshow("window", *frame);
+	cv::imshow("moving-cells", *frame);
 	int key = cv::waitKey(1);
 	if (key > 0)
 	{
+		key = key & 0xFF;
 		std::cout << "KEY PRESSED: " << key << std::endl;
-		stop = stop || key == 1048603;
-		if (key == 1048693) { initParticles(UNIFORM_INIT); }
-		if (key == 1048690) { initParticles(RANDOM_INIT); }
+		stop = stop || key == 27; // ESC
+
+		switch (key)
+		{
+		case 117 : // u
+			initParticles(UNIFORM_INIT);
+			break;
+			
+		case 114 : // r
+			initParticles(RANDOM_INIT);
+			break;
+
+		case 141 : // Enter (vernum)
+			verbose = !verbose;
+
+			
+		case 97 : // a
+			gravitationRadius -= 100;
+			if (gravitationRadius < 0) { gravitationRadius = 0; }
+			break;
+
+		case 122 : // z
+			gravitationRadius = initialGravitationRadius;
+			break;
+
+		case 101 : // e
+			gravitationRadius += 100;
+			if (gravitationRadius > 1000) { gravitationRadius = 1000; }
+			break;
+
+			
+		case 113 : // q
+			bodyAttractPower -= 0.1;
+			if (bodyAttractPower < 0) { bodyAttractPower = 0; }
+			break;
+
+		case 115 : // s
+			bodyAttractPower = initialBodyAttractPower;
+			break;
+
+		case 100 : // d
+			bodyAttractPower += 0.1;
+			break;
+
+			
+		case 119 : // w
+			bodyRepelPower -= 0.1;
+			if (bodyRepelPower < 0) { bodyRepelPower = 0; }
+			break;
+
+		case 120 : // x
+			bodyRepelPower = initialBodyRepelPower;
+			break;
+
+		case 99 : // c
+			bodyRepelPower += 0.1;
+			break;
+
+
+		case 183 : // 7 (vernum)
+			particleIntensity -= 1;
+			if (particleIntensity < 0) { particleIntensity = 0; } 
+			setupColor();
+			break;
+
+		case 184 : // 8 (vernum)
+			particleIntensity = initialParticleIntensity;
+			setupColor();
+			break;
+
+		case 185 : // 9 (vernum)
+			particleIntensity += 1;
+			setupColor();
+			break;
+
+			
+		case 180 : // 4 (vernum)
+			particleDamping -= 0.01;
+			if (particleDamping < 0) { particleDamping = 0; }
+			break;
+
+		case 181 : // 5 (vernum)
+			particleDamping = initialParticleDamping;
+			break;
+
+		case 182 : // 6 (vernum)
+			particleDamping += 0.01;
+			break;
+
+			
+		case 177 : // 1 (vernum)
+			gravitationFactor -= 0.1;
+			break;
+
+		case 178 : // 2 (vernum)
+			gravitationFactor = initialGravitationFactor;
+			break;
+
+		case 179 : // 3 (vernum)
+			gravitationFactor += 0.1;
+			break;
+		}
 	}
-	//ms_sleep(10);
 }
 
 

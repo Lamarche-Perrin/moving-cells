@@ -64,6 +64,7 @@ float linearMap (float value, float min1, float max1, float min2, float max2);
 
 void loop ();
 void setup ();
+void setupColor ();
 void initParticles (int type);
 void getTime ();
 void computeBodies ();
