@@ -2,9 +2,9 @@ cmake_minimum_required (VERSION 2.8 FATAL_ERROR)
 
 project ("Moving Cells")
 
-set (CMAKE_CXX_FLAGS "-std=c++11")
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set (CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} $ENV{HOME}/programming/lib/freenect2/lib/cmake/freenect2)
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set (CMAKE_CXX_FLAGS "-std=c++11")
 set (OpenCV_DIR "/usr/lib/opencv")
 
 find_package (OpenCV REQUIRED COMPONENTS core imgproc highgui)

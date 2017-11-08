@@ -25,9 +25,14 @@ cmake ..
 make
 ```
 
-* Run the program:
+Note that you might need to adjust `CMAKE_PREFIX_PATH` in `CMakeLists.txt` to fit with the install location of the freenect2 library, that is something like `path/to/freenect2/lib/cmake/freenect2`.
+
+* Run the programs:
 ```
 ./bin/moving-cells
+./bin/time-delays
+./bin/time-ghosts
+./bin/webcam-delays
 ```
 
 
