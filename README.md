@@ -13,7 +13,7 @@ sudo apt-get install libopencv-dev
 
 * Clone the project:
 ```
-git clone https://github.com/Lamarche-Perrin/moving_cells
+git clone https://github.com/Lamarche-Perrin/moving-cells
 ```
 
 * Compile the files:
