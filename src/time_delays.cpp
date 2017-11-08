@@ -46,13 +46,14 @@
 
 // PARAMETERS
 
-const int delay = 80;
+int delay = 80;
+double switchingTime = 120;
+
 const bool initVertical = false;
 const bool initReverse = true;
 
 const int width = 1024;
 const int height = 768;
-const double switchingTime = 120;
 
 const bool parallelComputation = false;
 const int threadNumber = 6;
@@ -101,8 +102,11 @@ void serialHorizontalReverse ();
 
 void sigint_handler(int s) { stopKinect = true; }
 
-int main(int argc, char *argv[])
+int main (int argc, char *argv[])
 {
+	if (argc > 1) { delay = atoi(argv[1]); } else { delay = 200; }
+	if (argc > 2) { switchingTime = atof(argv[2]); } else { switchingTime = 120; }
+
 	std::string program_path(argv[0]);
 	size_t executable_name_idx = program_path.rfind("time-delays");
 

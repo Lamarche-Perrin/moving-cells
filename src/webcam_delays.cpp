@@ -39,17 +39,16 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+unsigned int delay = 200;
+double switchingTime = 120;
+int camId = 1;
 
-const int camId = 1;
-
-const int delay = 200;
 const bool initVertical = false;
 const bool initReverse = false;
 const bool initSymmetric = false;
 
 const int frameWidth = 1280; // 640 (cam1)   1280 (cam2)   1024 (screen)
 const int frameHeight = 720; // 360 (cam1)    720 (cam2)    768 (screen)
-const double switchingTime = 120;
 
 bool resizeFrame = true;
 const int windowWidth = 1024;
@@ -126,8 +125,12 @@ std::string type2str (int type) {
 }
 
 
-int main ()
+int main (int argc, char *argv[])
 {
+	if (argc > 1) { delay = atoi(argv[1]); } else { delay = 200; }
+	if (argc > 2) { switchingTime = atof(argv[2]); } else { switchingTime = 120; }
+	if (argc > 3) { camId = atoi(argv[3]); } else { camId = 1; }
+	
 	cam = cv::VideoCapture (camId);
  
 	if (!cam.isOpened()) { std::cout << "cannot open camera"; }

@@ -54,8 +54,9 @@
 const float thresholdAdd = 100;
 const int bodyMinSize = 1000;
 const bool reverseXAxis = false;
+const bool reverseYAxis = true;
 
-const bool thresholdFromFile = false;
+const bool thresholdFromFile = true;
 
 const bool allowKinectCalibration = false;
 const bool allowSensorDisplay = false;
@@ -65,29 +66,30 @@ const bool allowGraphicsDisplay = true;
 
 // GRAPHICS PARAMETERS
 
-
+const int gravitationType = SYMMETRIC_GRAVITATION;
+const int borderType = MIRROR_BORDER;
+const int initType = UNIFORM_INIT;
 const bool useSpeed = false;
 const float xSpeedThreshold = 400.;
 
-const int gravitationType = SYMMETRIC_GRAVITATION;
-const float initialBodyAttractPower = 2.;
-const float initialBodyRepelPower = 3.;
+const float initialBodyAttractPower = 2;
+const float initialBodyRepelPower = 4;
 const float initialGravitationFactor = 1;
-const float initialGravitationRadius = 500;
-const float gravitationSpeedFactor = 0.5;
+const float initialGravitationRadius = 0;
+const float initialGravitationSpeed = 0.4;
 
-const int particleNumber = 196608*2;
+const int initialParticleNumber = 1024*768/2;
 const float initialParticleDamping = 0.02;
 
-const float initialParticleIntensity = 12;
-const int particleRed = 15;
-const int particleGreen = 8;
-const int particleBlue = 8;
+const int initialColor = 0;
+const float initialParticleIntensity = 3;
 
-const int borderType = MIRROR_BORDER;
-const int initType = UNIFORM_INIT;
+const int initialThreadNumber = 6;
 
-
+const int colorNb = 4;
+const int particleRedArray[]   = {3, 12,  6, 7};
+const int particleGreenArray[] = {6,  6,  5, 7};
+const int particleBlueArray[]  = {12, 3, 12, 7};
 
 
 
@@ -100,7 +102,7 @@ const float bodyAttractPower = 2.;
 const float bodyRepelPower = 3.;
 const float gravitationFactor = 1;
 const float gravitationRadius = 0;
-const float gravitationSpeedFactor = 0.3;
+const float gravitationSpeed = 0.3;
 
 const int particleNumber = 800000;
 const float particleDamping = 0.02;
@@ -124,7 +126,7 @@ const float bodyAttractPower = 2.;
 const float bodyRepelPower = 3.;
 const float gravitationFactor = 1;
 const float gravitationRadius = 300;
-const float gravitationSpeedFactor = 0.5;
+const float gravitationSpeed = 0.5;
 
 const int particleNumber = 500000;
 const float particleDamping = 0.02;
@@ -144,14 +146,21 @@ const int initType = UNIFORM_INIT;
 const int graphicsWidth = 1024;
 const int graphicsHeight = 768;
 
-const int threadNumber = 7;
-
 const int depthWidth = 512;
 const int depthHeight = 424;
 const int depthDepth = 400;
 
+int color = initialColor;
+int particleRed = particleRedArray[color];
+int particleGreen = particleGreenArray[color];
+int particleBlue = particleBlueArray[color];
+
+int particleNumber = initialParticleNumber;
+int threadNumber = initialThreadNumber;
+
 float gravitationFactor = initialGravitationFactor;
 float gravitationRadius = initialGravitationRadius;
+float gravitationSpeed = initialGravitationSpeed;
 float particleIntensity = initialParticleIntensity;
 float particleDamping = initialParticleDamping;
 float bodyAttractPower = initialBodyAttractPower;
@@ -167,7 +176,8 @@ BodyList *newBodyList;
 BodyList *currentBodyList;
 
 bool verbose = false;
-
+int kinectFps = 0;
+int graphicsFps = 0;
 
 // GRAPHICS VARIABLES
 
@@ -199,11 +209,11 @@ pthread_attr_t attr;
 pthread_mutex_t mutex;
 
 pthread_t loopThread;
-pthread_t threads [threadNumber];
-int firstParticle [threadNumber];
-int lastParticle [threadNumber];
-int firstPixel [threadNumber];
-int lastPixel [threadNumber];
+pthread_t threads [initialThreadNumber];
+int firstParticle [initialThreadNumber];
+int lastParticle [initialThreadNumber];
+int firstPixel [initialThreadNumber];
+int lastPixel [initialThreadNumber];
 
 
 // FUNCTIONS
@@ -307,7 +317,8 @@ int main (int argc, char *argv[])
 
 		if (kinectSumDelay >= 3)
 		{
-			std::cout << "KINECT: " << (int)(((float)kinectFrameCounter)/kinectSumDelay) << "fps" << std::endl;
+			kinectFps = (int)(((float)kinectFrameCounter)/kinectSumDelay);
+			std::cout << "KINECT: " << kinectFps << "fps" << std::endl;
 			kinectSumDelay = 0;
 			kinectFrameCounter = 0;
 		}	
@@ -695,14 +706,14 @@ void setup ()
 	stop = false;
 
 	// SETUP PARTICLES
-	particles = new Particle [particleNumber];
+	particles = new Particle [initialParticleNumber];
 	initParticles(initType);
 
-	redColor = new int [particleNumber+1];
-	blueColor = new int [particleNumber+1];
-	greenColor = new int [particleNumber+1];
+	redColor = new int [initialParticleNumber+1];
+	blueColor = new int [initialParticleNumber+1];
+	greenColor = new int [initialParticleNumber+1];
 
-	setupColor();
+	setupColor(true);
 	
 	// SETUP DISPLAY
 	cv::namedWindow("moving-cells", CV_WINDOW_NORMAL);
@@ -715,6 +726,18 @@ void setup ()
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
+	setupThreads();
+
+	// SETUP TIME
+	frameCounter = 0;
+	delay = 0;
+	sumDelay = 0;
+	gettimeofday(&startTimer, NULL);
+}
+
+
+void setupThreads ()
+{
 	int particlePerThread = particleNumber / threadNumber;
 	int currentParticle = 0;
 	for (int i = 0; i < threadNumber; i++)
@@ -734,16 +757,18 @@ void setup ()
 		lastPixel[i] = currentPixel;
 	}
 	lastPixel[threadNumber-1] = pixelNumber;
-
-	// SETUP TIME
-	frameCounter = 0;
-	delay = 0;
-	sumDelay = 0;
-	gettimeofday(&startTimer, NULL);
 }
 
-void setupColor ()
+
+void setupColor (bool init)
 {
+	if (init)
+	{
+		particleRed = particleRedArray[color];
+		particleGreen = particleGreenArray[color];
+		particleBlue = particleBlueArray[color];
+	}
+
 	for (int i = 0; i < particleNumber; i++)
 	{
 		redColor[i] = std::min((int)(i*particleRed*particleIntensity),255);
@@ -764,7 +789,8 @@ void getTime()
 
 	if (sumDelay >= 3)
 	{
-		std::cout << "GRAPHICS: " << (int)(((float)frameCounter)/sumDelay) << "fps" << std::endl;
+		graphicsFps = (int)(((float)frameCounter)/sumDelay);
+		std::cout << "GRAPHICS: " << graphicsFps << "fps" << std::endl;
 		sumDelay = 0;
 		frameCounter = 0;
 	}	
@@ -777,7 +803,7 @@ void initParticles (int type)
 	{
 	case RANDOM_INIT :
 	{
-		for (int i = 0; i < particleNumber; i++)
+		for (int i = 0; i < initialParticleNumber; i++)
 		{
 			Particle *particle = &particles[i];
 			particle->px = rand() % graphicsWidth;
@@ -802,7 +828,7 @@ void initParticles (int type)
 			}
 		}
 
-		for (int i = index; i < particleNumber; i++) {
+		for (int i = index; i < initialParticleNumber; i++) {
 			Particle *particle = &particles[i];
 			particle->px = rand() % graphicsWidth;
 			particle->py = rand() % graphicsHeight;
@@ -832,9 +858,11 @@ void computeBodies ()
 	{
 		Body *body = *it;
 
-		bodyY = linearMap(body->zMoy,0,depthDepth,0,graphicsHeight);
 		if (reverseXAxis) { bodyX = linearMap(body->xMoy,0,depthHeight,graphicsWidth,0); }
 		else { bodyX = linearMap(body->xMoy,0,depthHeight,0,graphicsWidth); }
+
+		if (reverseYAxis) { bodyY = linearMap(body->zMoy,0,depthDepth,graphicsHeight,0); }
+		else { bodyY = linearMap(body->zMoy,0,depthDepth,0,graphicsHeight); }
 
 		if (bodyX < 0) { bodyX = 0; } else if (bodyX >= graphicsWidth) { bodyX = graphicsWidth - 1; }
 		if (bodyY < 0) { bodyY = 0; } else if (bodyY >= graphicsHeight) { bodyY = graphicsHeight - 1; }
@@ -1082,7 +1110,25 @@ void draw ()
 		y += 20;
 
 		ss.str("");
+		ss << "Particles: " << particleNumber;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
 		ss << "Intensity: " << particleIntensity;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Threads: " << threadNumber;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Speed: " << gravitationSpeed;
 		str = ss.str();
 		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
@@ -1095,6 +1141,25 @@ void draw ()
 
 		ss.str("");
 		ss << "Factor: " << gravitationFactor;
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		y += 10;
+		ss.str("");
+		ss << "Kinect: " << kinectFps << "fps";
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Graphics: " << graphicsFps << "fps";
+		str = ss.str();
+		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "Color: " << particleRed << " " << particleGreen << " " << particleBlue;
 		str = ss.str();
 		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
@@ -1115,13 +1180,14 @@ void draw ()
 			initParticles(UNIFORM_INIT);
 			break;
 			
-		case 114 : // r
+		case 106 : // j
 			initParticles(RANDOM_INIT);
 			break;
 
 		case 141 : // Enter (vernum)
 			verbose = !verbose;
 
+			
 			
 		case 97 : // a
 			gravitationRadius -= 100;
@@ -1134,9 +1200,9 @@ void draw ()
 
 		case 101 : // e
 			gravitationRadius += 100;
-			if (gravitationRadius > 1000) { gravitationRadius = 1000; }
 			break;
 
+			
 			
 		case 113 : // q
 			bodyAttractPower -= 0.1;
@@ -1152,6 +1218,7 @@ void draw ()
 			break;
 
 			
+			
 		case 119 : // w
 			bodyRepelPower -= 0.1;
 			if (bodyRepelPower < 0) { bodyRepelPower = 0; }
@@ -1166,25 +1233,80 @@ void draw ()
 			break;
 
 
-		case 183 : // 7 (vernum)
+			
+		case 114 : // r
+			particleNumber -= (int) ((float)graphicsWidth*graphicsHeight / 16);
+			if (particleNumber < 0) { particleNumber += (int) ((float)graphicsWidth*graphicsHeight / 16); } 
+			setupThreads();
+			break;
+
+		case 116 : // t
+			particleNumber = initialParticleNumber;
+			setupThreads();
+			break;
+
+		case 121 : // y
+			particleNumber += (int) ((float)graphicsWidth*graphicsHeight / 16);
+			if (particleNumber > initialParticleNumber) { particleNumber = initialParticleNumber; } 
+			setupThreads();
+			break;
+
+
+			
+		case 102 : // f
 			particleIntensity -= 1;
 			if (particleIntensity < 0) { particleIntensity = 0; } 
-			setupColor();
+			setupColor(false);
 			break;
 
-		case 184 : // 8 (vernum)
+		case 103 : // g
 			particleIntensity = initialParticleIntensity;
-			setupColor();
+			setupColor(false);
 			break;
 
-		case 185 : // 9 (vernum)
+		case 104 : // h
 			particleIntensity += 1;
-			setupColor();
+			setupColor(false);
 			break;
 
 			
+
+		case 118 : // v
+			threadNumber -= 1;
+			if (threadNumber < 1) { threadNumber = 1; } 
+			setupThreads();
+			break;
+
+		case 98 : // b
+			threadNumber = initialThreadNumber;
+			setupThreads();
+			break;
+
+		case 110 : // n
+			threadNumber += 1;
+			if (threadNumber > initialThreadNumber) { threadNumber = initialThreadNumber; }
+			setupThreads();
+			break;
+
+
+			
+		case 183 : // 7 (vernum)
+			gravitationSpeed -= 0.1;
+			if (gravitationSpeed < 0) { gravitationSpeed = 0; } 
+			break;
+
+		case 184 : // 8 (vernum)
+			gravitationSpeed = initialGravitationSpeed;
+			break;
+
+		case 185 : // 9 (vernum)
+			gravitationSpeed += 0.1;
+			break;
+			
+
+			
 		case 180 : // 4 (vernum)
-			particleDamping -= 0.01;
+			particleDamping -= 0.002;
 			if (particleDamping < 0) { particleDamping = 0; }
 			break;
 
@@ -1193,9 +1315,10 @@ void draw ()
 			break;
 
 		case 182 : // 6 (vernum)
-			particleDamping += 0.01;
+			particleDamping += 0.002;
 			break;
 
+			
 			
 		case 177 : // 1 (vernum)
 			gravitationFactor -= 0.1;
@@ -1207,6 +1330,59 @@ void draw ()
 
 		case 179 : // 3 (vernum)
 			gravitationFactor += 0.1;
+			break;
+
+			
+		case 105 : // i
+			color--;
+			if (color < 0) { color = colorNb - 1; }
+			setupColor(true);
+			break;
+
+		case 111 : // o
+			color = initialColor;
+			setupColor(true);
+			break;
+
+		case 112 : // p
+			color++;
+			if (color >= colorNb) { color = 0; }
+			setupColor(true);
+			break;
+
+			
+		case 107 : // k
+			particleRed++;
+			setupColor(false);
+			break;
+
+		case 108 : // l
+			particleGreen++;
+			setupColor(false);
+			break;
+
+		case 109 : // m
+			particleBlue++;
+			setupColor(false);
+			break;
+
+			
+		case 59 : // ;
+			particleRed--;
+			if (particleRed < 0) { particleRed = 0; }
+			setupColor(false);
+			break;
+
+		case 58 : // :
+			particleGreen--;
+			if (particleGreen < 0) { particleGreen = 0; }
+			setupColor(false);
+			break;
+
+		case 33 : // !
+			particleBlue--;
+			if (particleBlue < 0) { particleBlue = 0; }
+			setupColor(false);
 			break;
 		}
 	}
@@ -1313,8 +1489,8 @@ void Particle::move ()
 	dx *= (1.-particleDamping);
 	dy *= (1.-particleDamping);
 
-	px += dx*gravitationSpeedFactor;
-	py += dy*gravitationSpeedFactor;
+	px += dx*gravitationSpeed;
+	py += dy*gravitationSpeed;
 	
 	while (px < 0 || px >= graphicsWidth) {
 		if (px < 0) { px = -px; } else if (px >= graphicsWidth) { px = 2*graphicsWidth-px-1; }
