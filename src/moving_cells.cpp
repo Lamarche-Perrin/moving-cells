@@ -11,7 +11,7 @@
  * through the open source driver libreenect2.
  * See: https://github.com/OpenKinect/libfreenect2
  * 
- * Copyright © 2015-2017 Robin Lamarche-Perrin and Bruno Pace
+ * Copyright © 2015-2018 Robin Lamarche-Perrin and Bruno Pace
  * (<Robin.Lamarche-Perrin@lip6.fr>)
  * 
  * Moving Cells is free software: you can redistribute it and/or
@@ -45,6 +45,7 @@
 #include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/frame_listener_impl.h>
 #include <libfreenect2/packet_pipeline.h>
+#include <libfreenect2/registration.h>
 
 #include "moving_cells.hpp"
 
@@ -56,33 +57,37 @@ const int bodyMinSize = 1000;
 const bool reverseXAxis = false;
 const bool reverseYAxis = true;
 
+const bool useSpeed = false;
+const bool realPositioning = false;
+
 const bool thresholdFromFile = true;
 
 const bool allowKinectCalibration = false;
 const bool allowSensorDisplay = false;
 const bool allowGraphicsDisplay = true;
 
-
+const int graphicsWidth = 1280; //1920;
+const int graphicsHeight = 720; //1080;
+const int distanceMax = 0;
 
 // GRAPHICS PARAMETERS
 
 const int gravitationType = SYMMETRIC_GRAVITATION;
 const int borderType = MIRROR_BORDER;
 const int initType = UNIFORM_INIT;
-const bool useSpeed = false;
 const float xSpeedThreshold = 400.;
 
-const float initialBodyAttractPower = 2;
+const float initialBodyAttractPower = 4;
 const float initialBodyRepelPower = 4;
-const float initialGravitationFactor = 1;
+const float initialGravitationFactor = 0.9;
 const float initialGravitationRadius = 0;
-const float initialGravitationSpeed = 0.4;
+const float initialGravitationSpeed = 0.2;
 
-const int initialParticleNumber = 1024*768/2;
-const float initialParticleDamping = 0.02;
+const int initialParticleNumber = 200000;
+const float initialParticleDamping = 0.015;
 
 const int initialColor = 0;
-const float initialParticleIntensity = 3;
+const float initialParticleIntensity = 10;
 
 const int initialThreadNumber = 6;
 
@@ -90,6 +95,7 @@ const int colorNb = 4;
 const int particleRedArray[]   = {3, 12,  6, 7};
 const int particleGreenArray[] = {6,  6,  5, 7};
 const int particleBlueArray[]  = {12, 3, 12, 7};
+
 
 
 
@@ -143,12 +149,9 @@ const int initType = UNIFORM_INIT;
 
 // KINECT VARIABLES
 
-const int graphicsWidth = 1024;
-const int graphicsHeight = 768;
-
 const int depthWidth = 512;
 const int depthHeight = 424;
-const int depthDepth = 400;
+const int depthDepth = 450;
 
 int color = initialColor;
 int particleRed = particleRedArray[color];
@@ -175,9 +178,13 @@ BodyList *bodyList;
 BodyList *newBodyList;
 BodyList *currentBodyList;
 
+bool connectedBodies = true;
 bool verbose = false;
 int kinectFps = 0;
 int graphicsFps = 0;
+
+libfreenect2::Registration* registration;
+
 
 // GRAPHICS VARIABLES
 
@@ -254,6 +261,7 @@ int main (int argc, char *argv[])
 	stopKinect = false;
 
 	libfreenect2::SyncMultiFrameListener listener (libfreenect2::Frame::Depth);
+	//libfreenect2::SyncMultiFrameListener listener (libfreenect2::Frame::Color | libfreenect2::Frame::Depth);
 	libfreenect2::FrameMap frames;
 
 	dev->setIrAndDepthFrameListener (&listener);
@@ -261,7 +269,8 @@ int main (int argc, char *argv[])
 
 	std::cout << "device serial: " << dev->getSerialNumber() << std::endl;
 	std::cout << "device firmware: " << dev->getFirmwareVersion() << std::endl;
-
+	registration = new libfreenect2::Registration (dev->getIrCameraParams(), dev->getColorCameraParams());
+	
 	size_t framecount = 0;
 
 	
@@ -328,6 +337,15 @@ int main (int argc, char *argv[])
 		libfreenect2::Frame *depth = frames[libfreenect2::Frame::Depth];
 		cv::Mat *depthFrame = new cv::Mat (depth->height, depth->width, CV_32FC1, depth->data);
 
+		libfreenect2::Frame *undepth;
+		if (realPositioning) {
+			undepth = new libfreenect2::Frame (depthWidth, depthHeight, 4);
+			registration->undistortDepth (depth, undepth);
+			//cv::Mat *undepthFrame = new cv::Mat (undepth->height, undepth->width, CV_32FC1, undepth->data);
+			//cv::imshow ("undepth", *undepthFrame / 4500.);
+		}
+
+
 		// THRESHOLD KINECT IF REQUIRED
 		if (thresholdKinect)
 		{
@@ -353,11 +371,12 @@ int main (int argc, char *argv[])
 		float *dPixel = depthFrame->ptr<float>(0);
 		float *tPixel = thresholdFrame->ptr<float>(0);
 		for (int i = 0; i < depth->width*depth->height; i++)
-			if (tPixel[i] != 0 && dPixel[i] > tPixel[i]) { dPixel[i] = 0; }
+			if ((tPixel[i] != 0 && dPixel[i] > tPixel[i]) || (distanceMax != 0 && dPixel[i] > distanceMax)) { dPixel[i] = 0; }
 
 
 		// DETECT BODIES
-		extractBodies(dPixel);
+		if (realPositioning) extractBodies (dPixel, undepth);
+		else extractBodies (dPixel);
 
 		for (BodyList::iterator it = bodyList->begin(); it != bodyList->end(); ++it)
 		{
@@ -384,14 +403,14 @@ int main (int argc, char *argv[])
 		// DISPLAY SENSOR
 		if (allowSensorDisplay) { displaySensor(depthFrame); }
 
-		int key = cv::waitKey(1);
+		int key = cv::waitKey (1);
 		if (key > 0)
 		{
 			key = key & 0xFF;
 			std::cout << "KINECT KEY PRESSED: " << key << std::endl;
 
-			stopKinect = stopKinect || key == 27; // ESC escape
-			thresholdKinect = thresholdKinect || key == 8; // BS backspace
+			stopKinect = stopKinect || key == 27; // Escape
+			thresholdKinect = thresholdKinect || key == 8; // Backspace
 
 			if (allowKinectCalibration) { calibrateKinect(key); }
 		}
@@ -484,6 +503,7 @@ void Body::print ()
 }
 
 
+
 void extractBodies (float *dPixel)
 {
 	newBodyList = new BodyList();
@@ -562,6 +582,139 @@ void extractBodies (float *dPixel)
 }
 
 
+
+void extractBodies (float *dPixel, libfreenect2::Frame *depth)
+{
+	newBodyList = new BodyList();
+	
+	cv::Mat *foundFrame = new cv::Mat (depthHeight, depthWidth, CV_32FC1, double(0));
+	float *fPixel = foundFrame->ptr<float>(0);
+	for (int y = 0; y < depthHeight; y++)
+	{
+		int i = depthWidth * y;
+		for (int x = 0; x < depthWidth; x++)
+		{
+			if (dPixel[i] > 0 && fPixel[i] == 0)
+			{	
+				int z = scale(dPixel[i]);	    
+
+				Body *body = new Body();
+				body->closestBody = 0;
+				body->minDist = -1;
+
+				body->pixelNb = 0;
+				body->xMoy = 0;
+				body->yMoy = 0;
+				body->zMoy = 0;
+				body->extrema = false;
+
+				body->rpixelNb = 0;				
+				body->rxMoy = 0;
+				body->ryMoy = 0;
+				body->rzMoy = 0;
+				body->rextrema = false;
+
+				std::list<Pixel> pixelList;
+				pixelList.push_back(Pixel(x,y,z));
+				foundFrame->at<float>(cv::Point(x,y)) = 1;
+		    
+				while (!pixelList.empty())
+				{
+					Pixel p = pixelList.front();
+					pixelList.pop_front();
+					registration->getPointXYZ (depth, p.y, p.x, p.rx, p.ry, p.rz);
+					//std::cout << p.rx << " / " << p.ry << " / " << p.rz << std::endl;
+
+					body->pixelNb++;
+					
+					body->xMoy += p.x;
+					body->yMoy += p.y;
+					body->zMoy += p.z;
+
+					if (! body->extrema) {
+						body->xMin = x;
+						body->xMax = x;
+						body->yMin = y;
+						body->yMax = y;
+						body->zMin = z;
+						body->zMax = z;
+						body->extrema = true;
+					}
+
+					else {
+						if (p.x < body->xMin) { body->xMin = p.x; }
+						if (p.x > body->xMax) { body->xMax = p.x; }
+						if (p.y < body->yMin) { body->yMin = p.y; }
+						if (p.y > body->yMax) { body->yMax = p.y; }
+						if (p.z < body->zMin) { body->zMin = p.z; }
+						if (p.z > body->zMax) { body->zMax = p.z; }
+					}
+
+					if (p.rx == p.rx && p.ry == p.ry && p.rz == p.rz) {
+						body->rpixelNb++;
+					
+						body->rxMoy += p.rx;
+						body->ryMoy += p.ry;
+						body->rzMoy += p.rz;
+
+						if (! body->rextrema) {
+							body->rxMin = p.rx;
+							body->rxMax = p.rx;
+							body->ryMin = p.ry;
+							body->ryMax = p.ry;
+							body->rzMin = p.rz;
+							body->rzMax = p.rz;
+							body->rextrema = true;
+						}
+
+						else {
+							if (p.rx < body->rxMin) { body->rxMin = p.rx; }
+							if (p.rx > body->rxMax) { body->rxMax = p.rx; }
+							if (p.ry < body->ryMin) { body->ryMin = p.ry; }
+							if (p.ry > body->ryMax) { body->ryMax = p.ry; }
+							if (p.rz < body->rzMin) { body->rzMin = p.rz; }
+							if (p.rz > body->rzMax) { body->rzMax = p.rz; }
+						}
+					}
+
+					
+
+					int s = 1;
+					for (int dx = -s; dx <= s; dx++)
+						for (int dy = -s; dy <= s; dy++)
+						{
+							if (dx !=0 && dy !=0) { continue; }
+							int nx = p.x+dx;
+							int ny = p.y+dy;
+							int ni = nx+ny*depthWidth;
+							if (nx >=0 && nx < depthWidth && ny >= 0 && ny < depthHeight)
+								if (dPixel[ni] > 0 && fPixel[ni] == 0)
+								{
+									int nz = scale(dPixel[ni]);
+									pixelList.push_back(Pixel(nx,ny,nz));
+									fPixel[ni] = 1;
+								}
+						}
+				}
+
+				body->xMoy /= body->pixelNb;
+				body->yMoy /= body->pixelNb;
+				body->zMoy /= body->pixelNb;
+
+				body->rxMoy /= body->rpixelNb;
+				body->ryMoy /= body->rpixelNb;
+				body->rzMoy /= body->rpixelNb;
+
+				if (body->pixelNb >= bodyMinSize) { newBodyList->push_back(body); }
+				else { delete body; }
+			}
+			i++;
+		}
+	}
+	delete foundFrame;
+}
+
+
 void displaySensor (cv::Mat *depthFrame)
 {
 	for (BodyList::iterator it = bodyList->begin(); it != bodyList->end(); ++it)
@@ -574,44 +727,44 @@ void displaySensor (cv::Mat *depthFrame)
 		cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 3);
 
 		ss.str("");
-		ss << round(body->xMoy - body->xMin);
+		ss << round((body->rxMoy - body->rxMin)*100);
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(body->xMin,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 		ss.str("");
-		ss << round(body->xMax - body->xMoy);
+		ss << round((body->rxMax - body->rxMoy)*100);
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(body->xMax,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 		ss.str("");
-		ss << round(body->yMoy - body->yMin);
+		ss << round((body->ryMoy - body->ryMin)*100);
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 		ss.str("");
-		ss << round(body->yMax - body->yMoy);
+		ss << round((body->ryMax - body->ryMoy)*100);
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 		ss.str("");
-		ss << round(body->zMoy - body->zMin);
+		ss << round((body->rzMoy - body->rzMin)*100);
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 		ss.str("");
-		ss << round(body->zMax - body->zMoy);
+		ss << round((body->rzMax - body->rzMoy)*100);
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 		ss.str("");
-		ss << "(" << round(body->xMoy) << ", " << round(body->yMoy) << ", " << round(body->zMoy) << ")";
+		ss << "(" << round(body->rxMoy*100) << ", " << round(body->ryMoy*100) << ", " << round(body->rzMoy*100) << ")";
 		strIndex = ss.str();
 		cv::putText(*depthFrame, strIndex, cv::Point(10,20), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
-		ss.str("");
-		ss << "(" << round(body->xMoyS) << ", " << round(body->yMoyS) << ", " << round(body->zMoyS) << ")";
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(10,50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+		// ss.str("");
+		// ss << "(" << round(body->xMoyS) << ", " << round(body->yMoyS) << ", " << round(body->zMoyS) << ")";
+		// strIndex = ss.str();
+		// cv::putText(*depthFrame, strIndex, cv::Point(10,50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 
 		for (int y = body->yMin; y <= body->yMax; y++)
@@ -644,6 +797,7 @@ void displaySensor (cv::Mat *depthFrame)
 	}
 	    
 	cv::imshow ("depth", *depthFrame / 4500.);
+	//cv::resizeWindow ("depth", 600, 600);
 }
 
 
@@ -693,7 +847,7 @@ void *loop (void *arg)
 	while (!stop)
 	{
 		getTime();
-		computeBodies();
+		if (connectedBodies) { computeBodies(); }
 		computeParticles();
 		draw();
 	}
@@ -718,6 +872,9 @@ void setup ()
 	// SETUP DISPLAY
 	cv::namedWindow("moving-cells", CV_WINDOW_NORMAL);
 	cv::setWindowProperty ("moving-cells", CV_WND_PROP_FULLSCREEN, 1);
+
+	if (allowSensorDisplay) cv::namedWindow("depth", CV_WINDOW_NORMAL);
+	//if (allowSensorDisplay) cv::namedWindow("undepth", CV_WINDOW_NORMAL);
 	
 	frame = new cv::Mat(graphicsHeight, graphicsWidth, CV_8UC3);
 	pixels = new int [graphicsWidth*graphicsHeight];
@@ -867,150 +1024,24 @@ void computeBodies ()
 		if (bodyX < 0) { bodyX = 0; } else if (bodyX >= graphicsWidth) { bodyX = graphicsWidth - 1; }
 		if (bodyY < 0) { bodyY = 0; } else if (bodyY >= graphicsHeight) { bodyY = graphicsHeight - 1; }
 
-		switch (gravitationType) {
+		float xLeftMoy = 141.137681915898 + body->zMoy * -0.265896172366349 ;
+		float xRightMoy = 153.394431112159 + body->zMoy * -0.290751630452789 ;
+		float xRightMax = 229.83608352771 + body->zMoy * -0.444576937865905 ;
+		float xLeftMax = 222.846660642123 + body->zMoy * -0.435883490904086 ;
+		float xLeftMin = 88.1288073818904 + body->zMoy * -0.17052605260994 ;
+		float xRightMin = 84.3813368345125 + body->zMoy * -0.157046334691957 ;
         
-		case SYMMETRIC_GRAVITATION :
-		{
-			if (useSpeed) {
-				float speed = (body->xMaxS-body->xMinS)/2;
-				if (speed > xSpeedThreshold) { bodyWeight = linearMap(speed,0,200,0,-bodyRepelPower); }
-				else {
-					float xLeftMoy = 141.137681915898 + body->zMoy * -0.265896172366349 ;
-					float xRightMoy = 153.394431112159 + body->zMoy * -0.290751630452789 ;
-					float xRightMax = 229.83608352771 + body->zMoy * -0.444576937865905 ;
-					float xLeftMax = 222.846660642123 + body->zMoy * -0.435883490904086 ;
-					float xLeftMin = 88.1288073818904 + body->zMoy * -0.17052605260994 ;
-					float xRightMin = 84.3813368345125 + body->zMoy * -0.157046334691957 ;
+		float xLeft = body->xMoy - body->xMin;
+		float xRight = body->xMax - body->xMoy;
 
-					float xLeft = body->xMoy - body->xMin;
-					float xRight = body->xMax - body->xMoy;
+		float xMin = xLeftMin + xRightMin;
+		float xMoy = xLeftMoy + xRightMoy;
+		float xMax = xLeftMax + xRightMax;
 
-					float xMin = xLeftMin + xRightMin;
-					float xMoy = xLeftMoy + xRightMoy;
-					float xMax = xLeftMax + xRightMax;
-
-					float x = xLeft + xRight;
+		float x = xLeft + xRight;
       
-					if (x < xMoy) { bodyWeight = linearMap(x,xMin,xMoy,bodyAttractPower,0); }
-				}
-			}
-
-			else {
-				float xLeftMoy = 141.137681915898 + body->zMoy * -0.265896172366349 ;
-				float xRightMoy = 153.394431112159 + body->zMoy * -0.290751630452789 ;
-				float xRightMax = 229.83608352771 + body->zMoy * -0.444576937865905 ;
-				float xLeftMax = 222.846660642123 + body->zMoy * -0.435883490904086 ;
-				float xLeftMin = 88.1288073818904 + body->zMoy * -0.17052605260994 ;
-				float xRightMin = 84.3813368345125 + body->zMoy * -0.157046334691957 ;
-        
-				float xLeft = body->xMoy - body->xMin;
-				float xRight = body->xMax - body->xMoy;
-
-				float xMin = xLeftMin + xRightMin;
-				float xMoy = xLeftMoy + xRightMoy;
-				float xMax = xLeftMax + xRightMax;
-
-				float x = xLeft + xRight;
-      
-				if (x < xMoy) { bodyWeight = linearMap(x,xMin,xMoy,bodyAttractPower,0); }
-				else { bodyWeight = linearMap(x,xMoy,xMax,0,-bodyRepelPower); }
-			}
-		}
-		break;
-
-		case QUADRANT_GRAVITATION : case LINEAR_GRAVITATION : case EXPONENTIAL_GRAVITATION :
-		{
-			if (useSpeed) {
-				float speed = (body->xMaxS-body->xMinS)/2;
-				if (speed > xSpeedThreshold) { bodyLeftWeight = bodyRightWeight = bodyTopWeight = bodyBottomWeight = linearMap(speed,0,xSpeedThreshold,0,-2*bodyRepelPower); }
-				else {
-					float xLeftMoy = 141.137681915898 + body->zMoy * -0.265896172366349 ;
-					float xRightMoy = 153.394431112159 + body->zMoy * -0.290751630452789 ;
-					float xRightMax = 229.83608352771 + body->zMoy * -0.444576937865905 ;
-					float xLeftMax = 222.846660642123 + body->zMoy * -0.435883490904086 ;
-					float xLeftMin = 88.1288073818904 + body->zMoy * -0.17052605260994 ;
-					float xRightMin = 84.3813368345125 + body->zMoy * -0.157046334691957 ;
-					float yBottomMoy = 133.755606270363 + body->zMoy * -0.0983414952321892 + pow(body->zMoy,2) * -0.000271500935861165 ;
-					float yBottomMax = 212.908568445793 + body->zMoy * -0.332923639449663 + pow(body->zMoy,2) * -8.81651485585909e-05 ;
-
-					float yTopMoy = 109.337213570448 + body->zMoy * 0.114120900345369 + pow(body->zMoy,2) * -0.000684891973255737 ;
-					float yTopMax = 191.951017587996 + body->zMoy * -0.232794494230743 + pow(body->zMoy,2) * -0.000246330076936845 ;
-					float zFrontMax = 52.74426210174 + body->zMoy * -0.1929853192676 + pow(body->zMoy,2) * 0.00210624201544209 + pow(body->zMoy,3) * -4.1952134127603e-06 ;
-					float zFrontMoy = 16.1450019204802 + body->zMoy * 0.233090101419243 + pow(body->zMoy,2) * -0.000188126196289432 + pow(body->zMoy,3) * -6.13212732132743e-07 ;
-        
-					float xLeft = body->xMoy - body->xMin;
-					float xRight = body->xMax - body->xMoy;
-					float yTop = body->yMax - body->yMoy;
-
-					float xMin = xLeftMin + xRightMin;
-					float xMoy = xLeftMoy + xRightMoy;
-					float xMax = xLeftMax + xRightMax;
-
-					float x = xLeft + xRight;
-					float yThreshold = yTopMoy;
-					//std::cout << yTopMoy << "   " << yTop << "   " << yTopMax << std::endl;
-
-					if (yTop > yThreshold)
-					{
-						bodyLeftWeight = bodyRightWeight = 0;
-						bodyTopWeight = bodyBottomWeight = linearMap(yTop,yThreshold,yTopMax,0,2*bodyAttractPower);
-					}
-					else if (x < xMoy) { bodyLeftWeight = bodyRightWeight = bodyTopWeight = bodyBottomWeight = linearMap(x,xMin,xMoy,bodyAttractPower,0); }
-
-					/*
-					//float yMin = yBottomMin + yTopMin;
-					float yMoy = yBottomMoy + yTopMoy;
-					float yMax = yBottomMax + yTopMax;
-
-					float ratioMoy = xMoy/yMoy;
-					float ratioMax = xMin/yMax;
-					float ratioMin = yMax/xMin;
-					float ratio = ((float)body->xMax - (float)body->xMin)/((float)body->yMax - (float)body->yMin);
-					std::cout << ratioMin << "  " << ratio << "  " << ratioMax << std::endl;
-
-					bodyTopWeight = bodyBottomWeight = linearMap(ratio,ratioMin,ratioMax,0,bodyAttractPower);
-					bodyLeftWeight = bodyRightWeight = linearMap(ratio,ratioMin,ratioMax,bodyAttractPower,0);
-					*/
-				}
-			}
-
-			else {
-				float xLeftMin = 91.5361166850005 + body->zMoy * -0.219373694097734 ;
-				float xRightMin = 89.6285996303111 + body->zMoy * -0.213193855087035 ;
-				float xLeftMoy = 182.523638698647 + body->zMoy * -0.432365782586038 ;
-				float xRightMoy = 184.033174004946 + body->zMoy * -0.43261951092886 ;
-				float xLeftMax = 286.673815920798 + body->zMoy * -0.653639390943621 ;
-				float xRightMax = 226.730996551708 + body->zMoy * -0.463157907184652 ;
-				float yTopMin = 152.596415677309 + body->zMoy * -0.322485767964055 ;
-				float yBottomMin = 138.690675328497 + body->zMoy * -0.273156060074471 ;
-				float yTopMoy = 215.663789080728 + body->zMoy * -0.392673821745217 ;
-				float yBottomMoy = 232.626140770943 + body->zMoy * -0.402981877710885 ;
-				float yTopMax = 230.171686137297 + body->zMoy * -0.345754294141461 ;
-				float yBottomMax = 217.815525417847 + body->zMoy * -0.324352264183679 ;
-
-				float xLeft = body->xMoy - body->xMin;
-				float xRight = body->xMax - body->xMoy;
-
-				float yTop = body->yMoy - body->yMin;
-				float yBottom = body->yMax - body->yMoy;
-				//float zFront = body->zMoy - body->zMin;
-				//float zBack = body->zMax - body->zMoy;
-      
-				if (xLeft < xLeftMoy) { bodyLeftWeight = linearMap(xLeft,xLeftMin,xLeftMoy,bodyAttractPower,0); }
-				else { bodyLeftWeight = linearMap(xLeft,xLeftMoy,xLeftMax,0,-bodyRepelPower); }
-
-				if (xRight < xRightMoy) { bodyRightWeight = linearMap(xRight,xRightMin,xRightMoy,bodyAttractPower,0); }
-				else { bodyRightWeight = linearMap(xRight,xRightMoy,xRightMax,0,-bodyRepelPower); }
-
-				if (yTop < yTopMoy) { bodyTopWeight = linearMap(yTop,yTopMin,yTopMoy,bodyAttractPower,0); }
-				else { bodyTopWeight = linearMap(yTop,yTopMoy,yTopMax,0,-bodyRepelPower); }
-
-				if (yBottom < yBottomMoy) { bodyBottomWeight = linearMap(yBottom,yBottomMin,yBottomMoy,bodyAttractPower,0); }
-				else { bodyBottomWeight = linearMap(yBottom,yBottomMoy,yBottomMax,0,-bodyRepelPower); }
-			}
-		}
-		break;
-		}
+		if (x < xMoy) { bodyWeight = linearMap(x,xMin,xMoy,bodyAttractPower,0); }
+		else { bodyWeight = linearMap(x,xMoy,xMax,0,-bodyRepelPower); }
 
 		// UPDATE PARTICLES
 		for (int i = 0; i < threadNumber; i++)
@@ -1166,14 +1197,33 @@ void draw ()
 	}
 	
 	//cv::GaussianBlur (*frame, *frame, cv::Size(1,1), 1.5, 1.5);
-	cv::imshow("moving-cells", *frame);
-	int key = cv::waitKey(1);
+	cv::imshow ("moving-cells", *frame);
+	
+	int key = cv::waitKey (1);
 	if (key > 0)
 	{
 		key = key & 0xFF;
 		std::cout << "KEY PRESSED: " << key << std::endl;
 		stop = stop || key == 27; // ESC
 
+		if (key == 13) // Enter
+		{
+			time_t t = time(0);
+			struct tm *now = localtime (&t);
+			std::string filename = "moving-cells-screenshot-" + std::to_string (now->tm_year + 1900) + "-" + std::to_string (now->tm_mon + 1) + "-" + std::to_string (now->tm_mday) + "-" + std::to_string (now->tm_hour) + "-" + std::to_string (now->tm_min) + "-" + std::to_string (now->tm_sec) + ".png";
+
+			std::vector<int> params;
+			params.push_back (CV_IMWRITE_PNG_COMPRESSION);
+			params.push_back (0);
+			cv::imwrite (filename, *frame, params);
+			std::cout << "SCREENSHOT: " << filename << std::endl;
+		}
+
+		if (key == 85) // Page up
+		{ connectedBodies = true; }
+		if (key == 86) // Page down
+		{ connectedBodies = false; }
+		
 		switch (key)
 		{
 		case 117 : // u
@@ -1449,36 +1499,10 @@ void Particle::update ()
 
 	float addX = 0; float addY = 0;
 
-    switch (gravitationType) {
-
-    case SYMMETRIC_GRAVITATION :
-    {
-      float factor = bodyWeight / pow(dist,gravitationFactor);
-	  if (gravitationRadius > 0) { factor /= gravitationRadius; }
-      addX = (bodyX-px) * factor;
-      addY = (bodyY-py) * factor;
-    }
-    break;
-
-    case EXPONENTIAL_GRAVITATION :
-    {
-      float powDist = pow(dist,gravitationFactor);
-      float factor = gravitationFactor * powDist / pow(dist,2);
-
-      float dx = bodyX-px;
-      float expX = exp(dx/graphicsWidth);
-      float xRightFactor = bodyLeftWeight * expX;
-      float xLeftFactor = bodyRightWeight / expX;
-      addX = factor * dx * (xRightFactor + xLeftFactor) - (xRightFactor - xLeftFactor) / (graphicsWidth * powDist);
-
-      float dy = bodyY-py;
-      float expY = exp(dy/graphicsHeight);
-      float yBottomFactor = bodyTopWeight * expY;
-      float yTopFactor = bodyBottomWeight / expY;
-      addY = factor * dy * (yBottomFactor + yTopFactor) - (yBottomFactor - yTopFactor) / (graphicsHeight * powDist);
-    }
-    break;
-    }
+	float factor = bodyWeight / pow(dist,gravitationFactor);
+	if (gravitationRadius > 0) { factor /= gravitationRadius; }
+	addX = (bodyX-px) * factor;
+	addY = (bodyY-py) * factor;
 
 	dx += addX; dy += addY;
 }

@@ -28,7 +28,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
+#include <random>
 
 // DEFINE ENUM
 
@@ -55,7 +55,6 @@ typedef std::list<Body*> BodyList;
 // FUNCTIONS
 
 void extractBodies (float *dPixel);
-void extractBodies (float *dPixel, libfreenect2::Frame *depth);
 void displaySensor (cv::Mat *depthFrame);
 void calibrateKinect (int key);
 
@@ -65,6 +64,7 @@ float linearMap (float value, float min1, float max1, float min2, float max2);
 
 void loop ();
 void setup ();
+void setupScreens ();
 void setupThreads ();
 void setupColor (bool init);
 void initParticles (int type);
@@ -73,6 +73,9 @@ void computeBodies ();
 void computeParticles ();
 void draw ();
 int ms_sleep (unsigned int ms);
+
+void saveConfig (int index);
+void loadConfig (int index);
 
 void *loop (void *arg);
 	
@@ -89,8 +92,7 @@ void *applyPixels (void *arg);
 struct Pixel
 {
     int x; int y; int z;
-    float rx; float ry; float rz;
-    Pixel (int cx, int cy, int cz) : x(cx), y(cy), z(cz), rx(0), ry(0), rz(0) {}
+    Pixel (int cx, int cy, int cz) : x(cx), y(cy), z(cz) {}
 };
 
 
@@ -101,16 +103,9 @@ public:
     Body *closestBody;
     double minDist;
 
-	
-	int pixelNb;
-    int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax;
+    int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax, pixelNb;
     int xMinS, xMoyS, xMaxS, yMinS, yMoyS, yMaxS, zMinS, zMoyS, zMaxS;
-	bool extrema;
 
-	int rpixelNb;
-    float rxMin, rxMoy, rxMax, ryMin, ryMoy, ryMax, rzMin, rzMoy, rzMax;
-	bool rextrema;
-	
     Body ();
     void getClosestBody (BodyList *list);
     void update (double delay);
@@ -130,3 +125,26 @@ public:
 	void apply ();
 };
 
+
+// DEFINE SCREEN CLASS
+
+struct Screen {
+	char i;
+	bool active;
+	double time;
+	int delay;
+	
+	int sx, sy, sdx, sdy;
+	int cx, cy, cdx, cdy;
+	cv::Rect srect, crect;
+	cv::Rect srectp, crectp;
+	
+	Screen (char vi, int vx, int vy, int vdx, int vdy, int vdelay = 0);
+
+	void set ();
+	void set (int vx, int vy, int vdx, int vdy, int vdelay = 0);
+	void unset ();
+	void swap ();
+};
+
+typedef std::vector<Screen> ScreenVector;
