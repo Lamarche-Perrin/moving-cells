@@ -40,14 +40,14 @@ Run the program with
 ```
 ./bin/time-delays <input>
 ```
-where `input` is an optional parameter that is either
+where `<input>` is an optional parameter that is either
 * the camera id you want to stream from (list devices with `v4l2-ctl --list-devices` once `v4l-utils` is installed)
 * or the path to a video file you want to stream from.
 
 If not specified, the application will try to open the webcam with id `0`.
 
 
-### Controls during execution
+### Control during execution
 
 * `<Space>` to switch black screen on (or off)
 * `<Escape>` to close the application
@@ -60,7 +60,8 @@ If not specified, the application will try to open the webcam with id `0`.
 <br/><br/>
 
 * `<Enter>` to switch heterogeneous delay on (or off)
-* `h` or `v` to switch from vertical to horizontal delay
+* `h` to switch to horizontal delay
+* `v` to switch to vertical delay
 * `r` to reverse the direction of delay
 * `s` to activate or deactivate symmetric delay
 
