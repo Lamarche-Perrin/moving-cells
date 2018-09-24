@@ -4,7 +4,7 @@ Moving Cells is a digital installation building on a depth sensor to allow spect
 
 The current version of the program is implemented on Kinect for Windows v2 (K4W2) through the open source driver [libreenect2](https://github.com/OpenKinect/libfreenect2). Note that this sensor also requires a USB 3.0 controller.
 
-### Installation on Linux
+## Installation on Linux
 * Install [libreenect2](https://github.com/OpenKinect/libfreenect2).
 * Install OpenCV:
 ```
@@ -32,9 +32,38 @@ Note that you might need to adjust `CMAKE_PREFIX_PATH` in `CMakeLists.txt` to fi
 ./bin/moving-cells
 ./bin/time-delays
 ./bin/time-ghosts
-./bin/webcam-delays
 ```
 
+## Time Delays
+
+Run the program with
+```
+./bin/time-delays <input>
+```
+where `<input>` is an optional parameter that is either
+* the camera id you want to stream from (list devices with `v4l2-ctl --list-devices` once `v4l-utils` is installed)
+* or the path to a video file you want to stream from.
+
+If not specified, the application will try to open the webcam with id `0`.
+
+
+### Control during execution
+
+* `<Space>` to switch black screen on (or off)
+* `<Escape>` to close the application
+<br/><br/>
+
+* `0` to suppress delay
+* from `1` to `9` to set delay (from 15 frames to 135 frames, that is from 0.5 to 4.5 seconds in the case of 30fps)
+* `+` to increase delay by 1
+* `-` to decrease delay by 1
+<br/><br/>
+
+* `<Enter>` to switch heterogeneous delay on (or off)
+* `h` to switch to horizontal delay
+* `v` to switch to vertical delay
+* `r` to reverse the direction of delay
+* `s` to activate or deactivate symmetric delay
 
 ## License
 Copyright © 2015-2017 Robin Lamarche-Perrin and Bruno Pace  
