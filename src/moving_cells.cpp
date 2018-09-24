@@ -58,7 +58,8 @@ const bool reverseXAxis = false;
 const bool reverseYAxis = true;
 
 const bool useSpeed = false;
-const bool realPositioning = false;
+const bool realPositioning = true;
+const bool realMoy = true;
 
 const bool thresholdFromFile = true;
 
@@ -66,9 +67,46 @@ const bool allowKinectCalibration = false;
 const bool allowSensorDisplay = false;
 const bool allowGraphicsDisplay = true;
 
-const int graphicsWidth = 1280; //1920;
-const int graphicsHeight = 720; //1080;
+const int graphicsWidth = 1024; //1920;
+const int graphicsHeight = 768; //1080;
 const int distanceMax = 0;
+
+const bool withDistribution = true;
+const std::string distributionFilename = "../tools/distribution.test.csv";
+
+// KINECT DE DESSUS
+// const bool fromAbove = true;
+// const float xMin = -1.90;
+// const float xMax = 1.90;
+// const float yMin = -2.10;
+// const float yMax = 0.40;
+// const float zMin = 0;
+// const float zMax = 0;
+// const float rMin = 0.50/1.00;
+// const float rMoy = 1.25/1.00;
+// const float rMax = 1.60/1.00;
+
+// const int depthCropLeft = 100;
+// const int depthCropRight = 100;
+// const int depthCropTop = 0;
+// const int depthCropBottom = 150;
+
+// KINECT DE FACE
+const bool fromAbove = false;
+const float xMin = -2.30;
+const float xMax = 2.30;
+const float yMin = 0;
+const float yMax = 0;
+const float zMin = 2.00;
+const float zMax = 4.40;
+const float rMin = 0.45/1.75;
+const float rMoy = 1.35/1.75;
+const float rMax = 1.65/1.75;
+
+const int depthCropLeft = 0;
+const int depthCropRight = 0;
+const int depthCropTop = 0;
+const int depthCropBottom = 0;
 
 // GRAPHICS PARAMETERS
 
@@ -83,8 +121,9 @@ const float initialGravitationFactor = 0.9;
 const float initialGravitationRadius = 0;
 const float initialGravitationSpeed = 0.2;
 
-const int initialParticleNumber = 200000;
-const float initialParticleDamping = 0.015;
+const int initialParticleNumber = 500000;
+const float initialGravitationDamping = 0.015;
+const float distributionGravitationDamping = 0.05;
 
 const int initialColor = 0;
 const float initialParticleIntensity = 10;
@@ -96,55 +135,6 @@ const int particleRedArray[]   = {3, 12,  6, 7};
 const int particleGreenArray[] = {6,  6,  5, 7};
 const int particleBlueArray[]  = {12, 3, 12, 7};
 
-
-
-
-/*
-const bool useSpeed = true;
-const float xSpeedThreshold = 400.;
-
-const int gravitationType = EXPONENTIAL_GRAVITATION;
-const float bodyAttractPower = 2.;
-const float bodyRepelPower = 3.;
-const float gravitationFactor = 1;
-const float gravitationRadius = 0;
-const float gravitationSpeed = 0.3;
-
-const int particleNumber = 800000;
-const float particleDamping = 0.02;
-
-const float particleIntensity = 2;
-const int particleRed = 5;
-const int particleGreen = 3;
-const int particleBlue = 7;
-
-const int borderType = MIRROR_BORDER;
-const int initType = UNIFORM_INIT;
-*/
-
-/*
-// INTERACTIONS
-const bool useSpeed = false;
-const float xSpeedThreshold = 400.;
-
-const int gravitationType = SYMMETRIC_GRAVITATION;
-const float bodyAttractPower = 2.;
-const float bodyRepelPower = 3.;
-const float gravitationFactor = 1;
-const float gravitationRadius = 300;
-const float gravitationSpeed = 0.5;
-
-const int particleNumber = 500000;
-const float particleDamping = 0.02;
-
-const float particleIntensity = 4;
-const int particleRed = 3;
-const int particleGreen = 7;
-const int particleBlue = 13;
-
-const int borderType = MIRROR_BORDER;
-const int initType = UNIFORM_INIT;
-*/
 
 
 // KINECT VARIABLES
@@ -162,10 +152,12 @@ int particleNumber = initialParticleNumber;
 int threadNumber = initialThreadNumber;
 
 float gravitationFactor = initialGravitationFactor;
+float sqrtGravitationFactor = gravitationFactor / 2;
 float gravitationRadius = initialGravitationRadius;
+float sqGravitationRadius = pow (gravitationRadius, 2);
 float gravitationSpeed = initialGravitationSpeed;
 float particleIntensity = initialParticleIntensity;
-float particleDamping = initialParticleDamping;
+float gravitationDamping = initialGravitationDamping;
 float bodyAttractPower = initialBodyAttractPower;
 float bodyRepelPower = initialBodyRepelPower;
 
@@ -179,11 +171,15 @@ BodyList *newBodyList;
 BodyList *currentBodyList;
 
 bool connectedBodies = true;
+bool distributedBodies = false;
 bool verbose = false;
 int kinectFps = 0;
 int graphicsFps = 0;
 
 libfreenect2::Registration* registration;
+
+float savedGravitationDamping = initialGravitationDamping;
+
 
 
 // GRAPHICS VARIABLES
@@ -412,6 +408,9 @@ int main (int argc, char *argv[])
 			stopKinect = stopKinect || key == 27; // Escape
 			thresholdKinect = thresholdKinect || key == 8; // Backspace
 
+			if (key == 32) // Space
+				initParticles(UNIFORM_INIT);
+
 			if (allowKinectCalibration) { calibrateKinect(key); }
 		}
 
@@ -574,6 +573,7 @@ void extractBodies (float *dPixel)
 			body->xMoy /= body->pixelNb;
 			body->yMoy /= body->pixelNb;
 			body->zMoy /= body->pixelNb;
+			
 			if (body->pixelNb >= bodyMinSize) { newBodyList->push_back(body); }
 			else { delete body; }
 		}
@@ -583,7 +583,7 @@ void extractBodies (float *dPixel)
 
 
 
-void extractBodies (float *dPixel, libfreenect2::Frame *depth)
+void extractBodies (float *dPixel, libfreenect2::Frame *undepth)
 {
 	newBodyList = new BodyList();
 	
@@ -596,40 +596,44 @@ void extractBodies (float *dPixel, libfreenect2::Frame *depth)
 		{
 			if (dPixel[i] > 0 && fPixel[i] == 0)
 			{	
-				int z = scale(dPixel[i]);	    
+				int z = scale(dPixel[i]);
+
+				float rx, ry, rz;
+				registration->getPointXYZ (undepth, y, x, rx, ry, rz);
 
 				Body *body = new Body();
 				body->closestBody = 0;
 				body->minDist = -1;
 
 				body->pixelNb = 0;
-				body->xMoy = 0;
-				body->yMoy = 0;
-				body->zMoy = 0;
 				body->extrema = false;
-
-				body->rpixelNb = 0;				
-				body->rxMoy = 0;
-				body->ryMoy = 0;
-				body->rzMoy = 0;
 				body->rextrema = false;
 
+				if (realMoy) {
+					body->rpixelNb = 0;		
+					body->xMoy = 0;
+					body->yMoy = 0;
+					body->zMoy = 0;
+					body->rxMoy = 0;
+					body->ryMoy = 0;
+					body->rzMoy = 0;
+				}
+				
 				std::list<Pixel> pixelList;
-				pixelList.push_back(Pixel(x,y,z));
+				pixelList.push_back(Pixel(x,y,z,rx,ry,rz));
 				foundFrame->at<float>(cv::Point(x,y)) = 1;
 		    
 				while (!pixelList.empty())
 				{
 					Pixel p = pixelList.front();
 					pixelList.pop_front();
-					registration->getPointXYZ (depth, p.y, p.x, p.rx, p.ry, p.rz);
-					//std::cout << p.rx << " / " << p.ry << " / " << p.rz << std::endl;
 
 					body->pixelNb++;
-					
-					body->xMoy += p.x;
-					body->yMoy += p.y;
-					body->zMoy += p.z;
+					if (realMoy) {
+						body->xMoy += p.x;
+						body->yMoy += p.y;
+						body->zMoy += p.z;
+					}
 
 					if (! body->extrema) {
 						body->xMin = x;
@@ -651,11 +655,12 @@ void extractBodies (float *dPixel, libfreenect2::Frame *depth)
 					}
 
 					if (p.rx == p.rx && p.ry == p.ry && p.rz == p.rz) {
-						body->rpixelNb++;
-					
-						body->rxMoy += p.rx;
-						body->ryMoy += p.ry;
-						body->rzMoy += p.rz;
+						if (realMoy) {
+							body->rpixelNb++;					
+							body->rxMoy += p.rx;
+							body->ryMoy += p.ry;
+							body->rzMoy += p.rz;
+						}
 
 						if (! body->rextrema) {
 							body->rxMin = p.rx;
@@ -677,7 +682,6 @@ void extractBodies (float *dPixel, libfreenect2::Frame *depth)
 						}
 					}
 
-					
 
 					int s = 1;
 					for (int dx = -s; dx <= s; dx++)
@@ -687,25 +691,46 @@ void extractBodies (float *dPixel, libfreenect2::Frame *depth)
 							int nx = p.x+dx;
 							int ny = p.y+dy;
 							int ni = nx+ny*depthWidth;
-							if (nx >=0 && nx < depthWidth && ny >= 0 && ny < depthHeight)
+							if (nx >= 0 && nx < depthWidth && ny >= 0 && ny < depthHeight)
+								//if (nx >= depthCropLeft && nx < (depthWidth - depthCropRight) && ny >= depthCropTop && ny < (depthHeight -depthCropBottom))
 								if (dPixel[ni] > 0 && fPixel[ni] == 0)
 								{
 									int nz = scale(dPixel[ni]);
-									pixelList.push_back(Pixel(nx,ny,nz));
-									fPixel[ni] = 1;
+									float nrx, nry, nrz;
+									registration->getPointXYZ (undepth, ny, nx, nrx, nry, nrz);
+
+									if (abs (nrz - p.rz) < 0.1) {
+										pixelList.push_back(Pixel(nx,ny,nz,nrx,nry,nrz));
+										fPixel[ni] = 1;
+									}
 								}
 						}
 				}
 
-				body->xMoy /= body->pixelNb;
-				body->yMoy /= body->pixelNb;
-				body->zMoy /= body->pixelNb;
+				if (body->pixelNb >= bodyMinSize && (!realMoy || body->rpixelNb >= bodyMinSize)) {
+					if (realMoy) {
+						body->xMoy /= body->pixelNb;
+						body->yMoy /= body->pixelNb;
+						body->zMoy /= body->pixelNb;
 
-				body->rxMoy /= body->rpixelNb;
-				body->ryMoy /= body->rpixelNb;
-				body->rzMoy /= body->rpixelNb;
+						body->rxMoy /= body->rpixelNb;
+						body->ryMoy /= body->rpixelNb;
+						body->rzMoy /= body->rpixelNb;
+					}
 
-				if (body->pixelNb >= bodyMinSize) { newBodyList->push_back(body); }
+					else {
+						body->xMoy = (body->xMax + body->xMin) / 2;
+						body->yMoy = (body->yMax + body->yMin) / 2;
+						body->zMoy = (body->zMax + body->zMin) / 2;
+
+						body->rxMoy = (body->rxMax + body->rxMin) / 2;
+						body->ryMoy = (body->ryMax + body->ryMin) / 2;
+						body->rzMoy = (body->rzMax + body->rzMin) / 2;
+					}
+
+					if (body->xMoy < depthCropLeft || body->xMoy >= (depthWidth - depthCropRight) || body->yMoy < depthCropTop || body->yMoy >= (depthHeight -depthCropBottom)) delete body;
+					else newBodyList->push_back(body);
+				}
 				else { delete body; }
 			}
 			i++;
@@ -717,56 +742,114 @@ void extractBodies (float *dPixel, libfreenect2::Frame *depth)
 
 void displaySensor (cv::Mat *depthFrame)
 {
+	if (realPositioning) {
+		for (BodyList::iterator it = bodyList->begin(); it != bodyList->end(); ++it)
+		{
+			Body *body = *it;
+		
+			std::stringstream ss;
+			ss << body->index;
+			std::string strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 3);
+
+			ss.str("");
+			ss << round((body->rxMoy - body->rxMin)*100)/100;
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMin,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round((body->rxMax - body->rxMoy)*100)/100;
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMax,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round((body->ryMoy - body->ryMin)*100)/100;
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round((body->ryMax - body->ryMoy)*100)/100;
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round((body->rzMoy - body->rzMin)*100)/100;
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round((body->rzMax - body->rzMoy)*100)/100;
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << "(" << round(body->rxMoy*100)/100 << ", " << round(body->ryMoy*100)/100 << ", " << round(body->rzMoy*100)/100 << ")";
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(10,20), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			// ss.str("");
+			// ss << "(" << round(body->xMoyS) << ", " << round(body->yMoyS) << ", " << round(body->zMoyS) << ")";
+			// strIndex = ss.str();
+			// cv::putText(*depthFrame, strIndex, cv::Point(10,50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+		}
+	}
+
+	else {
+		for (BodyList::iterator it = bodyList->begin(); it != bodyList->end(); ++it)
+		{
+			Body *body = *it;
+		
+			std::stringstream ss;
+			ss << body->index;
+			std::string strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 3);
+
+			ss.str("");
+			ss << round(body->xMoy - body->xMin);
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMin,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round(body->xMax - body->xMoy);
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMax,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round(body->yMoy - body->yMin);
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round(body->yMax - body->yMoy);
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round(body->zMoy - body->zMin);
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << round(body->zMax - body->zMoy);
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			ss.str("");
+			ss << "(" << round(body->xMoy) << ", " << round(body->yMoy) << ", " << round(body->zMoy) << ")";
+			strIndex = ss.str();
+			cv::putText(*depthFrame, strIndex, cv::Point(10,20), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+
+			// ss.str("");
+			// ss << "(" << round(body->xMoyS) << ", " << round(body->yMoyS) << ", " << round(body->zMoyS) << ")";
+			// strIndex = ss.str();
+			// cv::putText(*depthFrame, strIndex, cv::Point(10,50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
+		}
+	}
+
 	for (BodyList::iterator it = bodyList->begin(); it != bodyList->end(); ++it)
 	{
 		Body *body = *it;
 		
-		std::stringstream ss;
-		ss << body->index;
-		std::string strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 3);
-
-		ss.str("");
-		ss << round((body->rxMoy - body->rxMin)*100);
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(body->xMin,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		ss.str("");
-		ss << round((body->rxMax - body->rxMoy)*100);
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(body->xMax,body->yMoy), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		ss.str("");
-		ss << round((body->ryMoy - body->ryMin)*100);
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		ss.str("");
-		ss << round((body->ryMax - body->ryMoy)*100);
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(body->xMoy,body->yMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		ss.str("");
-		ss << round((body->rzMoy - body->rzMin)*100);
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMin), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		ss.str("");
-		ss << round((body->rzMax - body->rzMoy)*100);
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(10,body->zMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		ss.str("");
-		ss << "(" << round(body->rxMoy*100) << ", " << round(body->ryMoy*100) << ", " << round(body->rzMoy*100) << ")";
-		strIndex = ss.str();
-		cv::putText(*depthFrame, strIndex, cv::Point(10,20), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-		// ss.str("");
-		// ss << "(" << round(body->xMoyS) << ", " << round(body->yMoyS) << ", " << round(body->zMoyS) << ")";
-		// strIndex = ss.str();
-		// cv::putText(*depthFrame, strIndex, cv::Point(10,50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
-
-
 		for (int y = body->yMin; y <= body->yMax; y++)
 		{
 			depthFrame->at<float>(cv::Point(body->xMin,y)) = 4500;
@@ -795,7 +878,7 @@ void displaySensor (cv::Mat *depthFrame)
 			depthFrame->at<float>(cv::Point(x,zMaxy)) = 4500;
 		}
 	}
-	    
+	
 	cv::imshow ("depth", *depthFrame / 4500.);
 	//cv::resizeWindow ("depth", 600, 600);
 }
@@ -848,6 +931,7 @@ void *loop (void *arg)
 	{
 		getTime();
 		if (connectedBodies) { computeBodies(); }
+		if (distributedBodies) { computeDistributedBodies(); }
 		computeParticles();
 		draw();
 	}
@@ -861,14 +945,17 @@ void setup ()
 
 	// SETUP PARTICLES
 	particles = new Particle [initialParticleNumber];
-	initParticles(initType);
 
 	redColor = new int [initialParticleNumber+1];
 	blueColor = new int [initialParticleNumber+1];
 	greenColor = new int [initialParticleNumber+1];
 
-	setupColor(true);
+	loadConfig (0);
 	
+	initParticles(initType);
+	setupColor(true);
+	if (withDistribution) setupDistribution();
+
 	// SETUP DISPLAY
 	cv::namedWindow("moving-cells", CV_WINDOW_NORMAL);
 	cv::setWindowProperty ("moving-cells", CV_WND_PROP_FULLSCREEN, 1);
@@ -932,6 +1019,20 @@ void setupColor (bool init)
 		blueColor[i] = std::min((int)(i*particleBlue*particleIntensity),255);
 		greenColor[i] = std::min((int)(i*particleGreen*particleIntensity),255);
 	}
+}
+
+
+void setupDistribution ()
+{
+	std::ifstream distributionFile (distributionFilename);
+
+	int x, y;
+	for (int i = 0; i < initialParticleNumber; i++) {
+		distributionFile >> x >> y;
+		particles[i].body = cv::Point (x, y);
+	}
+
+	distributionFile.close ();
 }
 
 
@@ -1015,33 +1116,58 @@ void computeBodies ()
 	{
 		Body *body = *it;
 
-		if (reverseXAxis) { bodyX = linearMap(body->xMoy,0,depthHeight,graphicsWidth,0); }
-		else { bodyX = linearMap(body->xMoy,0,depthHeight,0,graphicsWidth); }
+		if (realPositioning) {
+			if (fromAbove) {
+				bodyX = linearMap (body->rxMoy, xMin, xMax, graphicsWidth, 0);
+				bodyY = linearMap (body->ryMoy, yMin, yMax, graphicsHeight, 0);
 
-		if (reverseYAxis) { bodyY = linearMap(body->zMoy,0,depthDepth,graphicsHeight,0); }
-		else { bodyY = linearMap(body->zMoy,0,depthDepth,0,graphicsHeight); }
+				float ratio = (body->rxMax - body->rxMin) / (body->ryMax - body->ryMin);
+				if (ratio < rMoy) bodyWeight = linearMap (ratio, rMin, rMoy, bodyAttractPower, 0);
+				else bodyWeight = linearMap (ratio, rMoy, rMax, 0, -bodyRepelPower);
+			}
+			
+			else {
+				bodyX = linearMap (body->rxMoy, xMin, xMax, 0, graphicsWidth);
+				bodyY = linearMap (body->rzMoy, zMin, zMax, graphicsHeight, 0);
 
-		if (bodyX < 0) { bodyX = 0; } else if (bodyX >= graphicsWidth) { bodyX = graphicsWidth - 1; }
-		if (bodyY < 0) { bodyY = 0; } else if (bodyY >= graphicsHeight) { bodyY = graphicsHeight - 1; }
+				float ratio = (body->rxMax - body->rxMin) / (body->ryMax - body->ryMin);
+				if (ratio < rMoy) bodyWeight = linearMap (ratio, rMin, rMoy, bodyAttractPower, 0);
+				else bodyWeight = linearMap (ratio, rMoy, rMax, 0, -bodyRepelPower);
+			}
+				
+			// std::cout << body->rxMoy << " " << body->rzMoy << " " << ratio << std::endl;
+			// std::cout << bodyX << " " << bodyY << " " << bodyWeight << std::endl;
+		}
 
-		float xLeftMoy = 141.137681915898 + body->zMoy * -0.265896172366349 ;
-		float xRightMoy = 153.394431112159 + body->zMoy * -0.290751630452789 ;
-		float xRightMax = 229.83608352771 + body->zMoy * -0.444576937865905 ;
-		float xLeftMax = 222.846660642123 + body->zMoy * -0.435883490904086 ;
-		float xLeftMin = 88.1288073818904 + body->zMoy * -0.17052605260994 ;
-		float xRightMin = 84.3813368345125 + body->zMoy * -0.157046334691957 ;
+		else {
+			if (reverseXAxis) { bodyX = linearMap(body->xMoy,0,depthHeight,graphicsWidth,0); }
+			else { bodyX = linearMap(body->xMoy,0,depthHeight,0,graphicsWidth); }
+
+			if (reverseYAxis) { bodyY = linearMap(body->zMoy,0,depthDepth,graphicsHeight,0); }
+			else { bodyY = linearMap(body->zMoy,0,depthDepth,0,graphicsHeight); }
+
+			if (bodyX < 0) { bodyX = 0; } else if (bodyX >= graphicsWidth) { bodyX = graphicsWidth - 1; }
+			if (bodyY < 0) { bodyY = 0; } else if (bodyY >= graphicsHeight) { bodyY = graphicsHeight - 1; }
+
+			float xLeftMoy = 141.137681915898 + body->zMoy * -0.265896172366349 ;
+			float xRightMoy = 153.394431112159 + body->zMoy * -0.290751630452789 ;
+			float xRightMax = 229.83608352771 + body->zMoy * -0.444576937865905 ;
+			float xLeftMax = 222.846660642123 + body->zMoy * -0.435883490904086 ;
+			float xLeftMin = 88.1288073818904 + body->zMoy * -0.17052605260994 ;
+			float xRightMin = 84.3813368345125 + body->zMoy * -0.157046334691957 ;
         
-		float xLeft = body->xMoy - body->xMin;
-		float xRight = body->xMax - body->xMoy;
+			float xLeft = body->xMoy - body->xMin;
+			float xRight = body->xMax - body->xMoy;
 
-		float xMin = xLeftMin + xRightMin;
-		float xMoy = xLeftMoy + xRightMoy;
-		float xMax = xLeftMax + xRightMax;
+			float xMin = xLeftMin + xRightMin;
+			float xMoy = xLeftMoy + xRightMoy;
+			float xMax = xLeftMax + xRightMax;
 
-		float x = xLeft + xRight;
+			float x = xLeft + xRight;
       
-		if (x < xMoy) { bodyWeight = linearMap(x,xMin,xMoy,bodyAttractPower,0); }
-		else { bodyWeight = linearMap(x,xMoy,xMax,0,-bodyRepelPower); }
+			if (x < xMoy) { bodyWeight = linearMap(x,xMin,xMoy,bodyAttractPower,0); }
+			else { bodyWeight = linearMap(x,xMoy,xMax,0,-bodyRepelPower); }
+		}
 
 		// UPDATE PARTICLES
 		for (int i = 0; i < threadNumber; i++)
@@ -1057,6 +1183,17 @@ void computeBodies ()
 		}		
 	}
 }
+
+
+void computeDistributedBodies ()
+{
+	for (int i = 0; i < threadNumber; i++)
+	{
+		int rc = pthread_create(&threads[i], NULL, updateParticlesWithDistribution, (void *) (intptr_t) i);
+		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+	}
+}
+
 
 
 void computeParticles ()
@@ -1165,7 +1302,7 @@ void draw ()
 		y += 20;
 
 		ss.str("");
-		ss << "Damping: " << particleDamping;
+		ss << "Damping: " << gravitationDamping;
 		str = ss.str();
 		cv::putText(*frame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
@@ -1219,14 +1356,48 @@ void draw ()
 			std::cout << "SCREENSHOT: " << filename << std::endl;
 		}
 
+		if (key == 48) saveConfig (0);
+		if (key == 49) saveConfig (1);
+		if (key == 50) saveConfig (2);
+		if (key == 51) saveConfig (3);
+		if (key == 52) saveConfig (4);
+		if (key == 53) saveConfig (5);
+		if (key == 54) saveConfig (6);
+		if (key == 55) saveConfig (7);
+		if (key == 56) saveConfig (8);
+		if (key == 57) saveConfig (9);
+
+		if (key == 224) loadConfig (0);
+		if (key ==  38) loadConfig (1);
+		if (key == 233) loadConfig (2);
+		if (key ==  34) loadConfig (3);
+		if (key ==  39) loadConfig (4);
+		if (key ==  40) loadConfig (5);
+		if (key ==  45) loadConfig (6);
+		if (key == 232) loadConfig (7);
+		if (key ==  95) loadConfig (8);
+		if (key == 231) loadConfig (9);
+
 		if (key == 85) // Page up
 		{ connectedBodies = true; }
 		if (key == 86) // Page down
 		{ connectedBodies = false; }
-		
+
+		if (key == 176) // 0 vernum
+		{
+			if (distributedBodies) {
+				distributedBodies = false;
+				gravitationDamping = savedGravitationDamping;
+			} else {
+				distributedBodies = true;
+				savedGravitationDamping = gravitationDamping;
+				gravitationDamping = distributionGravitationDamping;
+			}
+		}
+
 		switch (key)
 		{
-		case 117 : // u
+		case 117 : case 32 : // u | Space
 			initParticles(UNIFORM_INIT);
 			break;
 			
@@ -1242,14 +1413,17 @@ void draw ()
 		case 97 : // a
 			gravitationRadius -= 100;
 			if (gravitationRadius < 0) { gravitationRadius = 0; }
+			sqGravitationRadius = pow (gravitationRadius, 2);
 			break;
 
 		case 122 : // z
 			gravitationRadius = initialGravitationRadius;
+			sqGravitationRadius = pow (gravitationRadius, 2);
 			break;
 
 		case 101 : // e
 			gravitationRadius += 100;
+			sqGravitationRadius = pow (gravitationRadius, 2);
 			break;
 
 			
@@ -1356,30 +1530,33 @@ void draw ()
 
 			
 		case 180 : // 4 (vernum)
-			particleDamping -= 0.002;
-			if (particleDamping < 0) { particleDamping = 0; }
+			gravitationDamping -= 0.002;
+			if (gravitationDamping < 0) { gravitationDamping = 0; }
 			break;
 
 		case 181 : // 5 (vernum)
-			particleDamping = initialParticleDamping;
+			gravitationDamping = initialGravitationDamping;
 			break;
 
 		case 182 : // 6 (vernum)
-			particleDamping += 0.002;
+			gravitationDamping += 0.002;
 			break;
 
 			
 			
 		case 177 : // 1 (vernum)
 			gravitationFactor -= 0.1;
+			sqrtGravitationFactor = gravitationFactor / 2;
 			break;
 
 		case 178 : // 2 (vernum)
 			gravitationFactor = initialGravitationFactor;
+			sqrtGravitationFactor = gravitationFactor / 2;
 			break;
 
 		case 179 : // 3 (vernum)
 			gravitationFactor += 0.1;
+			sqrtGravitationFactor = gravitationFactor / 2;
 			break;
 
 			
@@ -1442,7 +1619,17 @@ void draw ()
 void *updateParticles (void *arg)
 {
 	int id = (intptr_t) arg;
-	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].update(); }
+	if (gravitationRadius == 0)
+		for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].updateWithoutRadius(); }
+	else for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].updateWithRadius(); }
+	pthread_exit(NULL);
+	
+}
+
+void *updateParticlesWithDistribution (void *arg)
+{
+	int id = (intptr_t) arg;
+	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].updateWithDistribution(); }
 	pthread_exit(NULL);
 	
 }
@@ -1491,30 +1678,48 @@ Particle::Particle ()
 }
 
 
-void Particle::update ()
+void Particle::updateWithoutRadius ()
 {
-	float dist = sqrt(pow(bodyX-px,2)+pow(bodyY-py,2));
-	if (dist == 0 || (gravitationRadius > 0 && dist > gravitationRadius)) { return; }
-	if (gravitationRadius > 0) { dist /= gravitationRadius; }
+	float dist = pow (bodyX - px, 2) + pow (bodyY - py, 2);
+	if (dist == 0) return;
 
-	float addX = 0; float addY = 0;
-
-	float factor = bodyWeight / pow(dist,gravitationFactor);
-	if (gravitationRadius > 0) { factor /= gravitationRadius; }
-	addX = (bodyX-px) * factor;
-	addY = (bodyY-py) * factor;
-
-	dx += addX; dy += addY;
+	float factor = bodyWeight / pow (dist, sqrtGravitationFactor);
+	dx += (bodyX - px) * factor;
+	dy += (bodyY - py) * factor;
 }
 
-  
+
+void Particle::updateWithRadius ()
+{
+	float dist = pow (bodyX - px, 2) + pow (bodyY - py, 2);
+	if (dist == 0 || dist > sqGravitationRadius) return;
+	//if (gravitationRadius > 0) { dist /= gravitationRadius; }
+
+	float factor = bodyWeight / pow (dist, sqrtGravitationFactor);
+	//if (gravitationRadius > 0) { factor /= gravitationRadius; }
+	dx += (bodyX - px) * factor;
+	dy += (bodyY - py) * factor;
+}
+
+
+void Particle::updateWithDistribution ()
+{
+	float dist = sqrt(pow(body.x-px,2)+pow(body.y-py,2));
+	float factor = bodyAttractPower*2 / pow(dist,gravitationFactor);
+	float addX = (body.x-px) * factor;
+	float addY = (body.y-py) * factor;
+	
+	dx += addX; dy += addY;		
+}
+
+
 void Particle::move ()
 {
-	dx *= (1.-particleDamping);
-	dy *= (1.-particleDamping);
+	dx *= (1. - gravitationDamping);
+	dy *= (1. - gravitationDamping);
 
-	px += dx*gravitationSpeed;
-	py += dy*gravitationSpeed;
+	px += dx * gravitationSpeed;
+	py += dy * gravitationSpeed;
 	
 	while (px < 0 || px >= graphicsWidth) {
 		if (px < 0) { px = -px; } else if (px >= graphicsWidth) { px = 2*graphicsWidth-px-1; }
@@ -1563,3 +1768,63 @@ int ms_sleep (unsigned int ms)
 }
 
 
+void saveConfig (int index) {
+	std::stringstream ss;
+	ss << "moving-cells-config-" << index;
+	std::string filename = ss.str();
+
+	std::ofstream file;
+	file.open (filename, std::ios::out | std::ios::trunc);
+
+	file << "particleNumber " << particleNumber << "\n";
+	file << "particleIntensity " << particleIntensity << "\n";
+	file << "particleRed " << particleRed << "\n";
+	file << "particleGreen " << particleGreen << "\n";
+	file << "particleBlue " << particleBlue << "\n";
+	file << "bodyAttractPower " << bodyAttractPower << "\n";
+	file << "bodyRepelPower " << bodyRepelPower << "\n";
+	file << "gravitationRadius " << gravitationRadius << "\n";
+	file << "gravitationFactor " << gravitationFactor << "\n";
+	file << "gravitationSpeed " << gravitationSpeed << "\n";
+	file << "gravitationDamping " << gravitationDamping << "\n";
+	file << "threadNumber " << threadNumber << "\n";
+
+	file.close ();
+
+	std::cout << "CONFIG FILE " << index << " SAVED" << std::endl;
+}
+
+
+void loadConfig (int index) {
+	std::stringstream ss;
+	ss << "moving-cells-config-" << index;
+	std::string filename = ss.str();
+
+	std::ifstream file;
+	file.open (filename, std::ios::in);
+
+	std::string var;
+	std::string val;
+	
+	while (file >> var >> val) {
+		if (var == "particleNumber") particleNumber = atoi (val.c_str());
+		else if (var == "particleIntensity") particleIntensity = atof (val.c_str());
+		else if (var == "particleRed") particleRed = atoi (val.c_str());
+		else if (var == "particleGreen") particleGreen = atoi (val.c_str());
+		else if (var == "particleBlue") particleBlue = atoi (val.c_str());
+		else if (var == "bodyAttractPower") bodyAttractPower = atof (val.c_str());
+		else if (var == "bodyRepelPower") bodyRepelPower = atof (val.c_str());
+		else if (var == "gravitationRadius") { gravitationRadius = atof (val.c_str()); sqGravitationRadius = pow (gravitationRadius, 2); }
+		else if (var == "gravitationFactor") { gravitationFactor = atof (val.c_str()); sqrtGravitationFactor = gravitationFactor / 2; }
+		else if (var == "gravitationSpeed") gravitationSpeed = atof (val.c_str());
+		else if (var == "gravitationDamping") gravitationDamping = atof (val.c_str());
+		else if (var == "threadNumber") threadNumber = atoi (val.c_str());
+	}
+
+	file.close ();
+
+	setupColor(false);
+	setupThreads();
+
+	std::cout << "CONFIG FILE " << index << " LOADED" << std::endl;
+}

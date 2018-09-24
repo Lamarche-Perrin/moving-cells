@@ -55,7 +55,7 @@ typedef std::list<Body*> BodyList;
 // FUNCTIONS
 
 void extractBodies (float *dPixel);
-void extractBodies (float *dPixel, libfreenect2::Frame *depth);
+void extractBodies (float *dPixel, libfreenect2::Frame *undepth);
 void displaySensor (cv::Mat *depthFrame);
 void calibrateKinect (int key);
 
@@ -67,9 +67,11 @@ void loop ();
 void setup ();
 void setupThreads ();
 void setupColor (bool init);
+void setupDistribution ();
 void initParticles (int type);
 void getTime ();
 void computeBodies ();
+void computeDistributedBodies ();
 void computeParticles ();
 void draw ();
 int ms_sleep (unsigned int ms);
@@ -77,12 +79,15 @@ int ms_sleep (unsigned int ms);
 void *loop (void *arg);
 	
 void *updateParticles (void *arg);
+void *updateParticlesWithDistribution (void *arg);
 void *moveParticles (void *arg);
 void *applyParticles (void *arg);
 
 void *clearPixels (void *arg);
 void *applyPixels (void *arg);
 
+void saveConfig (int index);
+void loadConfig (int index);
 
 // CLASSES
 
@@ -91,6 +96,7 @@ struct Pixel
     int x; int y; int z;
     float rx; float ry; float rz;
     Pixel (int cx, int cy, int cz) : x(cx), y(cy), z(cz), rx(0), ry(0), rz(0) {}
+    Pixel (int cx, int cy, int cz, float crx, float cry, float crz) : x(cx), y(cy), z(cz), rx(crx), ry(cry), rz(crz) {}
 };
 
 
@@ -123,9 +129,12 @@ class Particle
 {
 public:
 	float px, py, dx, dy;
+	cv::Point body;
 	Particle ();
 
-	void update ();
+	void updateWithoutRadius ();
+	void updateWithRadius ();
+	void updateWithDistribution ();
 	void move ();
 	void apply ();
 };

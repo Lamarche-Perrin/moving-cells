@@ -14,3 +14,7 @@
 
 # Build files
 build
+
+# Tool files
+tools/experiments/output
+tools/experiments/config
