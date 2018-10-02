@@ -1462,8 +1462,8 @@ void Particle::updateAndMove ()
 	float dda = - 2 * dr * da / r - particleDamping * da / particleWeight;
 
 	// Apply motion
-	r += (dr + ddr) * delay * timeFactor;
-	a += (da + dda) * delay * timeFactor;
+	r += ddr / 2 * pow (delay * timeFactor, 2);
+	a += dda / 2 * pow (delay * timeFactor, 2);
 
 	dr += ddr * delay * timeFactor;
 	da += dda * delay * timeFactor;
