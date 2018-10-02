@@ -31,6 +31,8 @@
 
 #include <iostream>
 #include <iomanip>
+#include <fstream>
+
 #include <thread>
 #include <vector>
 #include <cstring>
@@ -49,8 +51,9 @@
 
 cv::Mat3b frame (1000, 1000, cv::Vec3b (0, 0, 0));
 
+bool stop = false;
 bool mouseMove = false;
-int mouseX, mouseY;
+double mouseX, mouseY;
 
 ALfloat sampleDuration = 3;
 ALsizei sampleRate = 44100;
@@ -63,18 +66,18 @@ ALfloat currentTime = 0;
 double windowWidth = 1000;
 double windowHeight = 500;
 
-ALfloat windowSampleDuration = 0.01;
+ALfloat windowSampleDuration = 0.02;
 ALsizei windowSampleNumber = sampleRate * windowSampleDuration;
 
-std::vector<ALshort> currentSamples;
+std::vector<ALdouble> currentSamples;
 cv::Mat plot;
 
 int main () {
 	// Parameters
-	double frequency1 = 440;
-	double amplitude1 = 1000;
-	double frequency2 = 4;
-	double amplitude2 = 100;
+	double amplitude1 = 500;
+	double frequency1 = 100;
+	double amplitude2 = 40;
+	double frequency2 = 0;
 
 	// Create device and context
 	ALCdevice *device = alcOpenDevice (NULL);
@@ -85,39 +88,42 @@ int main () {
 	if (! alcMakeContextCurrent (context)) { std::cerr << "Could not activate OpenAL context" << std::endl; return EXIT_FAILURE; } else { std::cout << "Activating OpenAL context" << std::endl; }
 
 	// Create window
-	cv::namedWindow ("singing-cells", CV_WINDOW_AUTOSIZE);
+	cv::namedWindow ("singing-cells", CV_WINDOW_NORMAL);
 	cv::setMouseCallback ("singing-cells", mouseEvents, NULL);
+	cv::resizeWindow ("singing-cells", windowWidth, windowHeight);
 
-	cv::namedWindow ("singing-plot", CV_WINDOW_NORMAL);
-	cv::resizeWindow ("singing-plot", windowWidth, windowHeight);
-
-	currentSamples = std::vector<ALshort> (sampleNumber);
+	currentSamples = std::vector<ALdouble> (sampleNumber);
 	sinWave (currentSamples, amplitude2, frequency2);
-	amWave (currentSamples, amplitude1, frequency1);
+	fmWave (currentSamples, amplitude1, frequency1, frequency1);
 
 	plotWave (currentSamples);
 	plotParameters (amplitude1, frequency1, amplitude2, frequency2);
 
 	std::thread windowThread (displayFrame);
-
+	mouseMove = true;
+	
 	// Create samples
-	bool stop = false;
 	while (! stop) {
 		if (mouseMove) {
-			frequency1 = mouseX;
-			frequency2 = mouseY / 10;
+			frequency2 = mouseX * 20;
+			amplitude2 = mouseY * 10;
 			mouseMove = false;
 		} else { continue; }
-		
+			
 		sinWave (currentSamples, amplitude2, frequency2);
-		amWave (currentSamples, amplitude1, frequency1);
+		fmWave (currentSamples, amplitude1, frequency1, frequency1);
+
+		//printWave (currentSamples, "samples.csv");
 		plotWave (currentSamples);
 		plotParameters (amplitude1, frequency1, amplitude2, frequency2);
 		
 		// Create buffer
 		ALuint buffer;
 		alGenBuffers (1, &buffer);
-		alBufferData (buffer, sampleFormat, &currentSamples[0], sampleNumber * sizeof (ALushort), sampleRate);
+
+		std::vector<ALshort> finalSamples = std::vector<ALshort> (sampleNumber);
+		for (unsigned int i = 0; i < sampleNumber; i++) { finalSamples[i] = (ALshort) currentSamples[i]; }
+		alBufferData (buffer, sampleFormat, &finalSamples[0], sampleNumber * sizeof (ALushort), sampleRate);
 		if (alGetError() != AL_NO_ERROR) { std::cerr << "Problem while feeding samples" << std::endl; return EXIT_FAILURE; } //else { std::cout << "Feeding samples" << std::endl; }
 
 		// Create source
@@ -131,8 +137,8 @@ int main () {
 		ALint status;
 		do
 		{
-			// ALfloat seconds = 0.f;
-			// alGetSourcef (source, AL_SEC_OFFSET, &seconds);
+			//ALfloat seconds = 0.f;
+			//alGetSourcef (source, AL_SEC_OFFSET, &seconds);
 			//std::cout << "\rPlaying samples... " << std::fixed << std::setprecision(2) << seconds << " sec";
 			if (mouseMove) { alSourceStop (source); }
 			alGetSourcei (source, AL_SOURCE_STATE, &status);
@@ -161,23 +167,30 @@ void mouseEvents (int event, int x, int y, int flags, void *userdata)
 	
 	if (event == cv::EVENT_MOUSEMOVE) {
 		mouseMove = true;
-		mouseX = x;
-		mouseY = y;
-		//std::cout << "MOUSE CLICK (" << x << "," << y << ")" << std::endl;
+		mouseX = ((double) x) / windowWidth;
+		mouseY = ((double) y) / windowHeight;
+		//std::cout << "MOUSE CLICK (" << mouseX << "," << mouseY << ")" << std::endl;
 	}
 }
 
 void displayFrame () {
 	while (true) {
-		cv::imshow ("singing-cells", frame);
-		cv::imshow ("singing-plot", plot);
-		cv::waitKey(1);
+		cv::imshow ("singing-cells", plot);
+
+		int key = cv::waitKey (1);
+		if (key > 0)
+		{
+			key = key & 0xFF;
+			std::cout << "KEY PRESSED: " << key << std::endl;
+			stop = stop || key == 27;
+			if (! stop) { std::cout << "STOP" << std::endl; }
+		}
 	}
 }
 
 
 
-void sinWave (std::vector<ALshort> &samples, float amplitude, float frequency)
+void sinWave (std::vector<ALdouble> &samples, double amplitude, double frequency)
 {
 	ALfloat time = currentTime;
 	for (unsigned int i = 0; i < sampleNumber; i++) {
@@ -187,13 +200,13 @@ void sinWave (std::vector<ALshort> &samples, float amplitude, float frequency)
 }
 
 
-void addWave (std::vector<ALshort> &samples, const std::vector<ALshort> &samplesToAdd)
+void addWave (std::vector<ALdouble> &samples, const std::vector<ALdouble> &samplesToAdd)
 {
 	for (unsigned int i = 0; i < sampleNumber; i++) { samples[i] += samplesToAdd[i]; }
 }
 
 
-void amWave (std::vector<ALshort> &samples, double amplitude, double frequency)
+void amWave (std::vector<ALdouble> &samples, double amplitude, double frequency)
 {
 	ALfloat time = currentTime;
 	for (unsigned int i = 0; i < sampleNumber; i++) {
@@ -203,18 +216,33 @@ void amWave (std::vector<ALshort> &samples, double amplitude, double frequency)
 }
 
 
-void fmWave (std::vector<ALshort> &samples, double amplitude, double frequency, double deltaFrequency) {
+void fmWave (std::vector<ALdouble> &samples, double amplitude, double frequency, double deltaFrequency) {
 	if (deltaFrequency == 0) { deltaFrequency = frequency; }
 	ALfloat time = currentTime;
-	ALshort sampleSum = 0;
+	ALdouble sampleSum = 0;
 	for (unsigned int i = 0; i < sampleNumber; i++) {
 		sampleSum += samples[i];
-		samples[i] = amplitude * cos (2 * PI * frequency * time + 2 * PI * deltaFrequency * (sampleSum / sampleStep));
+		samples[i] = amplitude * cos (2 * PI * frequency * time + 2 * PI * deltaFrequency * sampleSum * sampleStep);
 		time += sampleStep;
 	}
 }
 
-void plotWave (std::vector<ALshort> &samples) {
+
+void printWave (std::vector<ALdouble> &samples, std::string filename) {
+	std::ofstream file;
+	file.open (filename, std::ios::out | std::ios::trunc);
+
+	ALfloat time = currentTime;
+	for (unsigned int i = 0; i < windowSampleNumber; i++) {
+		file << time << " " << samples[i] << "\n";
+		time += sampleStep;
+	}
+	
+	file.close();
+}
+
+
+void plotWave (std::vector<ALdouble> &samples) {
 	cv::Scalar white (255, 255, 255);
 	cv::Scalar black (0, 0, 0);
 	plot = cv::Mat (windowHeight, windowWidth, CV_8UC3, black);
@@ -316,8 +344,8 @@ int testOpenAL ()
     }
 	
 	// Read samples
-	std::vector<ALshort> samples (sampleNumber);
-    if (sf_read_short (file, &samples[0], sampleNumber) < sampleNumber) { std::cerr << "Problem while reading samples" << std::endl; return EXIT_FAILURE; } else { std::cout << "Reading samples" << std::endl; }
+	std::vector<ALdouble> samples (sampleNumber);
+    if (sf_read_double (file, &samples[0], sampleNumber) < sampleNumber) { std::cerr << "Problem while reading samples" << std::endl; return EXIT_FAILURE; } else { std::cout << "Reading samples" << std::endl; }
     sf_close (file);
 
 	// Modifying samples
@@ -376,7 +404,7 @@ int makeSound ()
 	if (! alcMakeContextCurrent (context)) { std::cerr << "Could not activate OpenAL context" << std::endl; return EXIT_FAILURE; } else { std::cout << "Activating OpenAL context" << std::endl; }
 
 	// Create samples	
-	std::vector<ALshort> samples (sampleNumber);
+	std::vector<ALdouble> samples (sampleNumber);
 	for (int t = 0; t < sampleNumber; t++) {
 		//samples[t] = amplitude1 * cos (t * frequency1 / sampleRate * 2 * PI);	
 		samples[t] = amplitude1 * cos (2. * PI * frequency1 * (double) t / sampleRate + amplitude2 / frequency2 * sin (2. * PI * frequency2 * (double) t / sampleRate));

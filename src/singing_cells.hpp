@@ -34,9 +34,11 @@ int makeSOund ();
 void mouseEvents (int event, int x, int y, int flags, void *userdata);
 void displayFrame ();
 
-void sinWave (std::vector<ALshort> &samples, float amplitude, float frequency);
-void addWave (std::vector<ALshort> &samples, const std::vector<ALshort> &samplesToAdd);
-void amWave (std::vector<ALshort> &samples, double amplitude, double frequency);
-void fmWave (std::vector<ALshort> &samples, double amplitude, double frequency, double deltaFrequency = 0);
-void plotWave (std::vector<ALshort> &samples);
+void sinWave (std::vector<ALdouble> &samples, double amplitude, double frequency);
+void addWave (std::vector<ALdouble> &samples, const std::vector<ALdouble> &samplesToAdd);
+void amWave (std::vector<ALdouble> &samples, double amplitude, double frequency);
+void fmWave (std::vector<ALdouble> &samples, double amplitude, double frequency, double deltaFrequency = 0);
+
+void printWave (std::vector<ALdouble> &samples, std::string filename);
+void plotWave (std::vector<ALdouble> &samples);
 void plotParameters (double amplitude1, double frequency1, double amplitude2, double frequency2);

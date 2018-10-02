@@ -66,7 +66,7 @@ If not specified, the application will try to open the webcam with id `0`.
 * `s` to activate or deactivate symmetric delay
 
 ## License
-Copyright © 2015-2017 Robin Lamarche-Perrin and Bruno Pace  
+Copyright © 2015-2018 Robin Lamarche-Perrin and Bruno Pace  
 Contact: <Robin.Lamarche-Perrin@lip6.fr>
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.

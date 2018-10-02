@@ -32,9 +32,6 @@
 
 // DEFINE ENUM
 
-#define MILLION 1000000L;
-#define PI 3.14159265
-
 #define SWITCH_ON_CLICK           0
 #define KEEP_PRESSED              1
 
@@ -72,6 +69,7 @@ void setupScreens ();
 void setupThreads ();
 void setupColor ();
 void setupPhysics ();
+void setdown ();
 
 void initParticles (int type);
 void getTime ();
@@ -89,11 +87,17 @@ void saveConfig (int index);
 void loadConfig (int index);
 void loadConfig (std::string filename);
 
+void saveParticles (int index);
+void saveParticles (std::string filename);
+void loadParticles (int index);
+void loadParticles (std::string filename);
+
 void *loop (void *arg);
 	
 void *updateParticles (void *arg);
 void *updateParticlesWithDistribution (void *arg);
 void *moveParticles (void *arg);
+void *updateAndMoveParticles (void *arg);
 void *applyParticles (void *arg);
 
 void *clearPixels (void *arg);
@@ -131,13 +135,15 @@ class Particle
 {
 public:
 	bool alive;
-	float px, py, dx, dy;
+	float x, y, dx, dy;
+	float r, a, dr, da;
 	cv::Point body;
 	Particle ();
 
 	void update ();
 	void updateWithDistribution ();
 	void move ();
+	void updateAndMove ();
 	void apply ();
 };
 
@@ -145,20 +151,22 @@ public:
 
 // DEFINE PARAMETER METHODS
 
-#define PARTICLE_DAMPING    0
-#define PARTICLE_SPEED      1
+#define PARTICLE_DAMPING      0
+#define PARTICLE_SPEED        1
 
-#define GRAVITATION_FACTOR  2
-#define GRAVITATION_ANGLE   3
+#define GRAVITATION_FACTOR    2
+#define GRAVITATION_ANGLE     3
 
-#define BODY_WEIGHT         4
-#define BODY_RADIUS         5
-#define BODY_ATTRACT_FACTOR 6
-#define BODY_REPEL_FACTOR   7
+#define BODY_X                4
+#define BODY_Y                5
+#define BODY_WEIGHT           6
+#define BODY_RADIUS           7
+#define BODY_ATTRACT_FACTOR   8
+#define BODY_REPEL_FACTOR     9
 
-#define PIXEL_INTENSITY     8
+#define PIXEL_INTENSITY      10
 
-#define PARAMETER_NUMBER    9
+#define PARAMETER_NUMBER     11
 
 
 struct Parameter
@@ -166,6 +174,7 @@ struct Parameter
 public:
 	int id;
 	std::string name;
+	std::string str;
 	int scancode;
 	int keycode;
 
@@ -183,9 +192,18 @@ public:
 typedef std::vector<Parameter> ParameterVector;
 
 
-float getParameterValue (int parameter);
-void setParameterValue (int parameter, float value);
-void addParameterValue (int parameter, float value);
+void openOutputParameterFile (std::string filename);
+void writeOutputParameterFile ();
+void closeOutputParameterFile ();
+
+void openInputParameterFile (std::string filename);
+void readInputParameterFile ();
+void closeInputParameterFile ();
+
+int getParameterId (std::string name);
+float getParameter (int parameter);
+void setParameter (int parameter, float value);
+void addParameter (int parameter, float value);
 
 
 // DEFINE EVENT CLASSES

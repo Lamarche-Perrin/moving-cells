@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <SDL.h>
+#include <time.h>
 
 #include <opencv2/opencv.hpp>
 
@@ -51,82 +52,91 @@
 // DISPLAY
 #define VERBOSE 0
 
-bool displayLive         = true;
-bool displaySDL          = true;
-bool displayFullscreen   = true;
-bool displayParameters   = true;
-bool displayMouse        = true;
-bool hideMouse           = true;
+bool displayCloud         = true;
+bool displaySDL           = true;
+bool displayFullscreen    = true;
+bool displayParameters    = true;
+bool displayMouse         = true;
+bool hideMouse            = true;
 
-bool recordingLive       = false;
+bool recordCloud          = false;
+bool recordParameters     = false;
+bool readParameters       = !recordParameters;
 
-float frameLogFrequency  = 2.;
-int frameFrequency       = 1;
-int frameLimit           = 0; //4096+1;
+bool realtimeMotion       = true;
+float realtimeDelay       = 1./30;
 
-int graphicsWidth        = 1280; //1920; //1024; //540*2; //640;
-int graphicsHeight       = 720; //1080; //768; //960; //768;
-int threadNumber         = 6;
+float framePerSecond      = 0;
+float frameLogFrequency   = 2.;
+int frameFrequency        = 1;
+int frameLimit            = 0; //4096+1;
 
-int borderMode           = NO_BORDERS;
-int mouseMode            = SWITCH_ON_CLICK;
-int particleInitMode     = UNIFORM_INIT;
+int graphicsWidth         = 1280; //1920; //1024; //540*2; //640;
+int graphicsHeight        = 720; //1080; //768; //960; //768;
+int threadNumber          = 6;
 
-int particleNumber       = 1280*720/4; // 259200
-float particleSpeed      = 0.001;
-float particleDamping    = 0.02;
+int borderMode            = NO_BORDERS;
+int mouseMode             = SWITCH_ON_CLICK;
+int particleInitMode      = UNIFORM_INIT;
+bool equationMotion       = true;
 
-float gravitationFactor  = -0.1;
-float gravitationAngle   = 0.;
+int particleNumber        = 1280*720/8; // 259200
+float particleWeight      = 0.0005;
+float particleSpeed       = 0.001;
+float particleDamping     = 0.02;
 
-float bodyX              = graphicsWidth / 2;
-float bodyY              = graphicsHeight / 2;
-float bodyWeight         = 0.;
-float bodyRadius         = 0.;
-float bodyAttractFactor  = 1.;
-float bodyRepelFactor    = 1.;
+float gravitationFactor   = 0;
+float timeFactor          = 1;
+float gravitationAngle    = 0.;
+
+float bodyX               = 0.5;
+float bodyY               = 0.5;
+float bodyWeight          = 0.;
+float bodyRadius          = 0.;
+float bodyAttractFactor   = 1.;
+float bodyRepelFactor     = 1.;
 
 RgbColor particleColorMin = RgbColor (  0,   0,   0);
-RgbColor particleColorMoy = RgbColor (  3,   6,  12);
+RgbColor particleColorMoy = RgbColor (  3,   6,  16);
 RgbColor particleColorMax = RgbColor (255, 255, 255);
 
-float particleRatioMin = 0.;
-float particleRatioMoy = 0.8;
-float particleRatioMax = 1000.;
+float particleRatioMin    = 0.;
+float particleRatioMoy    = 0.8;
+float particleRatioMax    = 1000.;
 
-float pixelIntensity = 1;
+float pixelIntensity      = 1;
 
-bool withScreens = false;
+bool withScreens          = false;
 
-bool withStencil = false;
-std::string stencilFilename = "../tools/stencil.test.png";
+bool withStencil          = false;
 
-bool withDistribution = true;
-std::string distributionFilename = "../tools/distribution.brain.csv";
+bool withDistribution     = true;
 float distributionParticleDamping = 0.05;
 
-bool withFixedBody      = false;
-float fixedBodyX        = 1./3;
-float fixedBodyY        = 1./3;
-float fixedBodyWeight   = 4;
+bool withFixedBody        = false;
+float fixedBodyX          = 1./3;
+float fixedBodyY          = 1./3;
+float fixedBodyWeight     = 4;
 
-bool withSymmetricBody  = false;
-
+bool withSymmetricBody    = false;
 
 const int maxParticleNumber   = 600000;
-const float maxParticleSpeed = 1000000;
+const float maxParticleSpeed  = 1000000;
 const int maxThreadNumber     = 8;
+
+//std::string parameterFilename    = "static-cells-parameter-sequence.csv";
+std::string stencilFilename      = "../tools/stencil.test.png";
+std::string distributionFilename = "../tools/distribution.brain.csv";
 
 
 // VARIABLES
-
-// int mouseX, mouseY;
-// bool mouseConnexion = false;
+#define MILLION 1000000L;
+#define BILLION 1000000000L;
+#define PI 3.14159265
 
 bool connectedBodies = true;
 bool distributedBodies = false;
 int graphicsFps = 0;
-
 
 float savedGravitationDamping = particleDamping;
 
@@ -135,6 +145,9 @@ float savedGravitationDamping = particleDamping;
 
 std::string configFilename = "";
 std::string outputFilename = "";
+std::ifstream inputParameterFile;
+std::ofstream outputParameterFile;
+std::string inputParameterLine;
 
 SDL_Window *window;
 SDL_Renderer *renderer;
@@ -146,9 +159,16 @@ bool stop;
 int pixelNumber;
 float gravitationDistanceFactor;
 float particleSpeedFactor;
-float realBodyRadius;
 
-struct timeval startTimer, endTimer;
+float realGravitationFactor;
+float realBodyRadius;
+float realBodyX;
+float realBodyY;
+float realBodyWeight;
+float realParticleDamping;
+float realParticleSpeed;
+
+struct timeval startTimer, endTimer, parameterTimer;
 int frameNb;
 int sumFrameNb;
 float delay;
@@ -166,9 +186,6 @@ int *particleGreenArray;
 int *particleBlueArray;
 
 float bodyLeftWeight, bodyRightWeight, bodyTopWeight, bodyBottomWeight;
-
-float bodyX2, bodyY2, bodyWeight2;
-float bodyLeftWeight2, bodyRightWeight2, bodyTopWeight2, bodyBottomWeight2;
 
 EventList events;
 cv::Mat stencilFrame;
@@ -211,12 +228,13 @@ int main (int argc, char *argv[])
 	if (argc > 2) { outputFilename = argv[2]; }
 
 	setup ();
-	if (displayLive) draw();
+	if (displayCloud) draw();
 
 	while (!stop)
 	{
 		getTime();
 		events.step (delay);
+		if (readParameters && inputParameterFile) { readInputParameterFile (); }
 		
 #if VERBOSE
 		std::cout << "FRAME NUMBER " << frameNb << std::endl;
@@ -231,8 +249,8 @@ int main (int argc, char *argv[])
 			|| (frameFrequency > 0 && frameNb % frameFrequency == 0)
 			|| (frameLogFrequency > 0 && (int) (log (frameNb) / log (frameLogFrequency)) == log (frameNb) / log (frameLogFrequency))
 			) {
-			if (displayLive) display();
-			if (recordingLive) record();
+			if (displayCloud) display();
+			if (recordCloud) record();
 		}
 
 #if VERBOSE
@@ -241,6 +259,8 @@ int main (int argc, char *argv[])
 
 		if (frameLimit > 0 && frameNb > frameLimit) stop = true;
 	}
+
+	setdown ();
 
 	return 0;
 }
@@ -258,8 +278,8 @@ void mouseEvents (int event, int x, int y, int flags, void *userdata)
 						   
 	if (event == cv::EVENT_MOUSEMOVE)
 	{
-		bodyX = x;
-		bodyY = y;
+		setParameter (BODY_X, ((double) x) / graphicsWidth);
+		setParameter (BODY_Y, ((double) y) / graphicsHeight);
 	}
 
 	else {
@@ -321,13 +341,13 @@ void setup ()
 	}
 
 	if (withFixedBody) {
-		bodyX = fixedBodyX * graphicsWidth;
-		bodyY = fixedBodyY * graphicsHeight;
+		bodyX = fixedBodyX;
+		bodyY = fixedBodyY;
 		bodyWeight = fixedBodyWeight;
 	}
 	
 	// SETUP DISPLAY
-	if (displayLive) {
+	if (displayCloud) {
 		if (displaySDL) {
 			if (SDL_Init(SDL_INIT_EVERYTHING) != 0) { std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl; }
 			else {
@@ -371,6 +391,19 @@ void setup ()
 
 	// SETUP EVENTS
 	setupEvents ();
+
+	// if (recordParameters) {
+	// 	openOutputParameterFile (parameterFilename);
+	// 	writeOutputParameterFile ();
+	// }
+	// else if (readParameters) { openInputParameterFile (parameterFilename); }
+}
+
+
+void setdown ()
+{
+	if (recordParameters) { closeOutputParameterFile(); }
+	else if (readParameters) { closeInputParameterFile(); }
 }
 
 
@@ -522,6 +555,17 @@ void getTime()
 	delay = (endTimer.tv_sec - startTimer.tv_sec) + (float) (endTimer.tv_usec - startTimer.tv_usec) / MILLION;
 	startTimer = endTimer;
 
+	if (framePerSecond > 0) {
+		if (delay < 1./framePerSecond) {
+			struct timespec waitTime = {0};
+			waitTime.tv_sec = 0;
+			waitTime.tv_nsec = (1./framePerSecond - delay) * BILLION;
+			nanosleep (& waitTime, (struct timespec *) NULL);
+			//std::cout << delay << " " << (1./framePerSecond) << " " << waitTime.tv_nsec << std::endl;
+		} else { std::cout << "WARNING: not able to have " << framePerSecond << "fps" << std::endl; }
+	}
+
+
 	frameNb++;
 	sumFrameNb++;
 	sumDelay += delay;
@@ -545,8 +589,8 @@ void initParticles (int type)
 		for (int i = 0; i < particleNumber; i++)
 		{
 			Particle *particle = &particles[i];
-			particle->px = rand() % graphicsWidth;
-			particle->py = rand() % graphicsHeight;
+			particle->x = rand() % graphicsWidth;
+			particle->y = rand() % graphicsHeight;
 			particle->dx = particle->dy = 0;
 		}	
 	}
@@ -561,16 +605,16 @@ void initParticles (int type)
 			for (float y = bin/2; y <= graphicsHeight - bin/2; y += bin)
 			{
 				Particle *particle = &particles[index++];
-				particle->px = x;
-				particle->py = y;
+				particle->x = x;
+				particle->y = y;
 				particle->dx = particle->dy = 0;
 			}
 		}
 
 		for (int i = index; i < particleNumber; i++) {
 			Particle *particle = &particles[i];
-			particle->px = rand() % graphicsWidth;
-			particle->py = rand() % graphicsHeight;
+			particle->x = rand() % graphicsWidth;
+			particle->y = rand() % graphicsHeight;
 			particle->dx = particle->dy = 0;
 		}
 	}
@@ -588,25 +632,42 @@ void computeBodies ()
 	std::cout << "BEGIN compute bodies" << std::endl;
 #endif
 
-	if (withSymmetricBody) {
-		bodyWeight2 = bodyWeight;
-		bodyX2 = graphicsWidth - (bodyX+1);
-		bodyY2 = graphicsHeight - (bodyY+1);
-	}
+	realGravitationFactor = gravitationFactor + 1;
+	realBodyX = bodyX * graphicsWidth;
+	realBodyY = bodyY * graphicsHeight;
+	realBodyWeight = bodyWeight * gravitationDistanceFactor * delay / realtimeDelay;
+	realParticleDamping = pow (1. - particleDamping, delay / realtimeDelay);
+	realParticleSpeed = particleSpeedFactor * delay / realtimeDelay;
 
 	// UPDATE PARTICLES
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_create(&threads[i], NULL, updateParticles, (void *) (intptr_t) i);
-		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+	if (equationMotion) {
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_create(&threads[i], NULL, updateAndMoveParticles, (void *) (intptr_t) i);
+			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+		}
+
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_join (threads[i], &status);
+			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+		}		
 	}
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_join (threads[i], &status);
-		if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
-	}		
+	else {
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_create(&threads[i], NULL, updateParticles, (void *) (intptr_t) i);
+			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+		}
 
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_join (threads[i], &status);
+			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+		}		
+	}
+	
 #if VERBOSE
 	std::cout << "-> END compute bodies" << std::endl;
 #endif
@@ -638,18 +699,20 @@ void computeParticles ()
 	std::cout << "BEGIN move particles" << std::endl;
 #endif
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_create(&threads[i], NULL, moveParticles, (void *) (intptr_t) i);
-		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
-	}
+	if (! equationMotion) {
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_create(&threads[i], NULL, moveParticles, (void *) (intptr_t) i);
+			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+		}
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_join (threads[i], &status);
-		if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_join (threads[i], &status);
+			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+		}
 	}
-
+	
 #if VERBOSE
 	std::cout << "-> END move particles" << std::endl;
 #endif
@@ -734,7 +797,7 @@ void draw ()
 	}
 
 	if (displayMouse) {
-		cv::circle (finalFrame, cv::Point(bodyX,bodyY), 1, cv::Scalar(250,200,100), 3);
+		cv::circle (finalFrame, cv::Point(realBodyX,realBodyY), 1, cv::Scalar(250,200,100), 3);
 	}
 		
 	if (displayParameters)
@@ -747,7 +810,7 @@ void draw ()
 				 
 		for (int parameter = 0; parameter < PARAMETER_NUMBER; parameter++) {
 			ss.str("");
-			ss << parameters[parameter].name << " = " << getParameterValue (parameter);
+			ss << parameters[parameter].str << " = " << getParameter (parameter);
 			str = ss.str();
 			cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 			y += 20;
@@ -829,7 +892,7 @@ void display ()
 
 				case SDL_BUTTON_MIDDLE :
 					for (int p = 0; p < PARAMETER_NUMBER; p++) {
-						if (keyboard[parameters[p].scancode]) { setParameterValue (p, parameters[p].moy); }
+						if (keyboard[parameters[p].scancode]) { setParameter (p, parameters[p].moy); }
 					}
 					break;
 				}
@@ -851,14 +914,14 @@ void display ()
 				break;
 
 			case SDL_MOUSEMOTION:
-				bodyX = event.motion.x;
-				bodyY = event.motion.y;
+				setParameter (BODY_X, ((double) event.motion.x) / graphicsWidth);
+				setParameter (BODY_Y, ((double) event.motion.y) / graphicsHeight);
 				break;
 
 			case SDL_MOUSEWHEEL:
 				for (int p = 0; p < PARAMETER_NUMBER; p++) {
 					if (keyboard[parameters[p].scancode]) {
-						float value = getParameterValue (p);
+						float value = getParameter (p);
 
 						if (event.wheel.y < 0) {
 							value -= parameters[p].ssub * event.wheel.y;
@@ -868,7 +931,7 @@ void display ()
 							value += parameters[p].aadd * event.wheel.y;
 							if (value > parameters[p].max) { value = parameters[p].max; }
 						}
-						setParameterValue (p, value);
+						setParameter (p, value);
 					}
 				}
 				break;
@@ -880,84 +943,116 @@ void display ()
 				// 		 SDL_GetKeyName (event.key.keysym.sym)
 				// 	);
 
-				switch (event.key.keysym.sym)
+				switch (event.key.keysym.scancode)
 				{
-				case SDLK_ESCAPE:
+				case SDL_SCANCODE_ESCAPE:
 					stop = true;
 					break;
 
-				case SDLK_KP_ENTER:
+				case SDL_SCANCODE_KP_ENTER:
 					displayParameters = !displayParameters;
 					break;				
 
-				case SDLK_RETURN : 
+				case SDL_SCANCODE_RETURN : 
 					initParticles (UNIFORM_INIT);
 					break;
 				
-				case SDLK_BACKSPACE : 
+				case SDL_SCANCODE_BACKSPACE : 
 					initParticles (RANDOM_INIT);
 					break;
 				
-				case SDLK_DELETE :
+				case SDL_SCANCODE_B :
+					if (borderMode == MIRROR_BORDERS) { borderMode = NO_BORDERS; } else { borderMode = MIRROR_BORDERS; }
+					break;
+
+					// Control intensity
+				case SDL_SCANCODE_DELETE :
 					if (pixelIntensity > 0) { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 4)); }
 					else { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 4)); }
 					break;
 
-				case SDLK_b :
-					if (borderMode == MIRROR_BORDERS) { borderMode = NO_BORDERS; } else { borderMode = MIRROR_BORDERS; }
+				case SDL_SCANCODE_RIGHTBRACKET : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 1)); break;
+				case SDL_SCANCODE_BACKSLASH : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 0.1)); break;
+
+					// Control parameter sequences
+				case SDL_SCANCODE_0 : case SDL_SCANCODE_1 : case SDL_SCANCODE_2 : case SDL_SCANCODE_3 : case SDL_SCANCODE_4 : case SDL_SCANCODE_5 : case SDL_SCANCODE_6 : case SDL_SCANCODE_7 : case SDL_SCANCODE_8 : case SDL_SCANCODE_9 :
+				{
+					std::string filename;
+					switch (event.key.keysym.scancode) {
+					case SDL_SCANCODE_0 : filename = "static-cells-parameter-sequence-0.csv"; break;
+					case SDL_SCANCODE_1 : filename = "static-cells-parameter-sequence-1.csv"; break;
+					case SDL_SCANCODE_2 : filename = "static-cells-parameter-sequence-2.csv"; break;
+					case SDL_SCANCODE_3 : filename = "static-cells-parameter-sequence-3.csv"; break;
+					case SDL_SCANCODE_4 : filename = "static-cells-parameter-sequence-4.csv"; break;
+					case SDL_SCANCODE_5 : filename = "static-cells-parameter-sequence-5.csv"; break;
+					case SDL_SCANCODE_6 : filename = "static-cells-parameter-sequence-6.csv"; break;
+					case SDL_SCANCODE_7 : filename = "static-cells-parameter-sequence-7.csv"; break;
+					case SDL_SCANCODE_8 : filename = "static-cells-parameter-sequence-8.csv"; break;
+					case SDL_SCANCODE_9 : filename = "static-cells-parameter-sequence-9.csv"; break;						
+					}
+
+					if (recordParameters) {
+						openOutputParameterFile (filename);
+						writeOutputParameterFile ();
+					}
+					else if (readParameters) { openInputParameterFile (filename); }
 					break;
+				}
+
+				case SDL_SCANCODE_PAGEUP :   saveParticles ("particle-positions.csv"); break;
+				case SDL_SCANCODE_PAGEDOWN : loadParticles ("particle-positions.csv"); break;
 
 					// Control body weight
-				case SDLK_SPACE :
-					if (bodyWeight != 0) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.)); }
-					else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.)); }
+				case SDL_SCANCODE_SPACE :
+					if (bodyWeight != 1.) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.)); }
+					else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.)); }
 					break;
 
-				case SDLK_LEFT :
+				case SDL_SCANCODE_LEFT :
 					events.interrupt (new LinearVariation (BODY_WEIGHT, 1., 1));
 					break;
 
-				case SDLK_UP :
+				case SDL_SCANCODE_UP :
 					events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.));
 					break;
 
-				case SDLK_DOWN :
+				case SDL_SCANCODE_DOWN :
 					events.interrupt (new LinearVariation (BODY_WEIGHT, 0., 1));
 					break;
 
-				case SDLK_RIGHT :
-					events.interrupt (new LinearVariation (BODY_WEIGHT, -0.5, 1));
+				case SDL_SCANCODE_RIGHT :
+					events.interrupt (new LinearVariation (BODY_WEIGHT, -0.75, 0.01));
 					break;
 
 					// Control all parameters
-				case SDLK_KP_0 :
+				case SDL_SCANCODE_KP_0 :
 					for (int p = 0; p < PARAMETER_NUMBER; p++) {
 						if (keyboard[parameters[p].scancode]) {
-							setParameterValue (p, parameters[p].moy);
+							setParameter (p, parameters[p].moy);
 						}
 					}
 					break;
 
-				case SDLK_KP_PLUS : case SDLK_KP_9 : case SDLK_KP_MULTIPLY : case SDLK_KP_MINUS :
+				case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 : case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS :
 					for (int p = 0; p < PARAMETER_NUMBER; p++) {
 						if (keyboard[parameters[p].scancode]) {
-							float value = getParameterValue (p);
+							float value = getParameter (p);
 							
-							switch (event.key.keysym.sym)
+							switch (event.key.keysym.scancode)
 							{
-							case SDLK_KP_PLUS :     value += parameters[p].aadd; break;
-							case SDLK_KP_9 :        value += parameters[p].add; break;
-							case SDLK_KP_MULTIPLY : value += parameters[p].sub; break;
-							case SDLK_KP_MINUS :    value += parameters[p].ssub; break;
+							case SDL_SCANCODE_KP_PLUS :     value += parameters[p].aadd; break;
+							case SDL_SCANCODE_KP_9 :        value += parameters[p].add; break;
+							case SDL_SCANCODE_KP_MULTIPLY : value += parameters[p].sub; break;
+							case SDL_SCANCODE_KP_MINUS :    value += parameters[p].ssub; break;
 							}
 							
 							switch (event.key.keysym.sym)
 							{
-							case SDLK_KP_PLUS : case SDLK_KP_9 :         if (value > parameters[p].max) { value = parameters[p].max; } break;
-							case SDLK_KP_MULTIPLY : case SDLK_KP_MINUS : if (value < parameters[p].min) { value = parameters[p].min; } break;
+							case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 :         if (value > parameters[p].max) { value = parameters[p].max; } break;
+							case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS : if (value < parameters[p].min) { value = parameters[p].min; } break;
 							}
 							
-							setParameterValue (p, value);
+							setParameter (p, value);
 						}
 					}
 					break;
@@ -1220,6 +1315,67 @@ void record ()
 }
 
 
+void saveParticles (int index)
+{
+	std::stringstream ss;
+	ss << "particle-positions-" << index << ".csv";
+	saveParticles (ss.str());
+}
+
+
+void saveParticles (std::string filename)
+{
+	std::ofstream outputParticleFile;
+	outputParticleFile.open (filename, std::ios::out | std::ios::trunc);
+
+	if (! outputParticleFile.is_open()) { std::cout << "COULD NOT OPEN FILE: " << filename << std::endl; }
+	else {
+		std::cout << "SAVING PARTICLE POSITIONS: " << filename << std::endl;
+
+		for (int i = 0; i < particleNumber; i++)
+		{ outputParticleFile << (particles[i].x / graphicsWidth) << " " << (particles[i].y / graphicsHeight) << " " << (particles[i].dx / graphicsWidth) << " " << (particles[i].dy / graphicsHeight) << "\n"; }	
+
+		outputParticleFile.close ();
+	}
+}
+
+
+void loadParticles (int index)
+{
+	std::stringstream ss;
+	ss << "particle-positions-" << index << ".csv";
+	loadParticles (ss.str());
+}
+
+
+void loadParticles (std::string filename)
+{
+	std::ifstream inputParticleFile;
+	inputParticleFile.open (filename, std::ios::in);
+
+	if (! inputParticleFile.is_open()) { std::cout << "COULD NOT OPEN FILE: " << filename << std::endl; }
+	else {
+		std::cout << "LOADING PARTICLE POSITIONS: " << filename << std::endl;
+
+		int i = 0;
+		std::string line;
+		double x, y, dx, dy;
+	
+		while (std::getline (inputParticleFile, line) && i < particleNumber) {
+			std::istringstream ss (line);
+			ss >> x >> y >> dx >> dy;
+			particles[i].x = x * graphicsWidth;
+			particles[i].y = y * graphicsHeight;
+			particles[i].dx = dx * graphicsWidth;
+			particles[i].dy = dy * graphicsHeight;
+			i++;
+		}
+
+		inputParticleFile.close ();
+	}
+}
+
+
 void *updateParticles (void *arg)
 {
 	int id = (intptr_t) arg;
@@ -1238,6 +1394,13 @@ void *moveParticles (void *arg)
 {
 	int id = (intptr_t) arg;
 	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].move(); }
+	pthread_exit(NULL);
+}
+
+void *updateAndMoveParticles (void *arg)
+{
+	int id = (intptr_t) arg;
+	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].updateAndMove(); }
 	pthread_exit(NULL);
 }
 
@@ -1273,57 +1436,73 @@ void *applyPixels (void *arg)
 Particle::Particle ()
 {
 	alive = true;
-	px = py = dx = dy = 0;
+	x = y = dx = dy = 0;
+	r = a = dr = da = 0;
 	body = cv::Point (0,0);
+}
+
+
+void Particle::updateAndMove ()
+{
+	// From absolute to relative coordinates
+	x = x - bodyX * graphicsWidth;
+	y = y - bodyY * graphicsHeight;
+
+	// From Cartesian to polar coordinates
+	r = sqrt (pow(x,2) + pow(y,2));
+	if (r == 0) { return; }
+
+	a = atan2 (y, x);
+
+	dr = (x * dx + y * dy) / r;
+	da = (x * dy - y * dx) / pow(x,2) * pow(cos(a),2);
+
+	// Compute motion
+	float ddr = r * pow(da,2) - particleDamping * dr / particleWeight - bodyWeight / pow(r,gravitationFactor);
+	float dda = - 2 * dr * da / r - particleDamping * da / particleWeight;
+
+	// Apply motion
+	r += (dr + ddr) * delay * timeFactor;
+	a += (da + dda) * delay * timeFactor;
+
+	dr += ddr * delay * timeFactor;
+	da += dda * delay * timeFactor;
+
+	// From polar to Cartesian coordinates
+	x = r * cos(a);
+	y = r * sin(a);
+
+	dx = - r * da * sin(a) + dr * cos(a);
+	dy = r * da * cos(a) + dr * sin(a);
+
+	// From relative to absolute coordinates
+	x = x + bodyX * graphicsWidth;
+	y = y + bodyY * graphicsHeight;
 }
 
 
 void Particle::update ()
 {
-	if (! alive) return;
+	//if (! alive) return;
 	
-	float distance = sqrt (pow (bodyX - px, 2) + pow (bodyY - py, 2));
-	if (! (distance == 0 || (bodyRadius > 0 && distance > realBodyRadius))) {
+	float distance = sqrt (pow (realBodyX - x, 2) + pow (realBodyY - y, 2));
+	if (distance != 0) { //if (! (distance == 0 || (bodyRadius > 0 && distance > realBodyRadius))) {
 		//if (bodyRadius > 0) { distance /= realBodyRadius; }
-
-		float factor = bodyWeight * gravitationDistanceFactor / pow (distance, gravitationFactor);
+		float factor = realBodyWeight / pow (distance, realGravitationFactor);
 		//if (bodyRadius > 0) { factor /= realBodyRadius; }
 
-		// float addX, addY;
+		float addX = factor * (realBodyX-x);
+		float addY = factor * (realBodyY-y);
 
-		// if (gravitationAngle == 0) {
-		// 	addX = factor * (bodyX-px) / distance; 
-		// 	addY = factor * (bodyY-py) / distance;
-		// } else {
-		float angle = atan ((bodyY-py)/(bodyX-px));
-		if (bodyX < px) { angle += PI; }
-		float addX = factor * cos (angle + gravitationAngle * PI / 180);
-		float addY = factor * sin (angle + gravitationAngle * PI / 180);
-		// }
-		
-		// float addX = (bodyX-px) * factor;
-		// float addY = (bodyY-py) * factor;
+		// float angle = atan ((realBodyY-y)/(realBodyX-x));
+		// if (realBodyX < x) { angle += PI; }
+		// float addX = factor * cos (angle + gravitationAngle * PI / 180);
+		// float addY = factor * sin (angle + gravitationAngle * PI / 180);
 
-		dx += addX; dy += addY;
+		dx += addX;
+		dy += addY;
 
-		if (dx > maxParticleSpeed) { dx = maxParticleSpeed; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl;}
-		if (dx < -maxParticleSpeed) { dx = -maxParticleSpeed; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl; }
-		if (dy > maxParticleSpeed) { dy = maxParticleSpeed; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl; }
-		if (dy < -maxParticleSpeed) { dy = -maxParticleSpeed; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl; }
-	}
-
-	if (withSymmetricBody) {
-		float distance2 = sqrt (pow (bodyX2 - px, 2) + pow (bodyY2 - py, 2));
-		if (! (distance2 == 0 || (bodyRadius > 0 && distance2 > realBodyRadius))) {
-			//if (bodyRadius > 0) { distance2 /= realBodyRadius; }
-
-			float factor2 = bodyWeight2 * gravitationDistanceFactor / pow (distance2, gravitationFactor);
-			//if (bodyRadius > 0) { factor2 /= realBodyRadius; }
-			float addX2 = (bodyX2-px) * factor2;
-			float addY2 = (bodyY2-py) * factor2;
-
-			dx += addX2; dy += addY2;
-		}
+		if (abs(dx) > maxParticleSpeed || abs(dy) > maxParticleSpeed) { dx = 0; dy = 0; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl; }
 	}
 }
 
@@ -1332,10 +1511,11 @@ void Particle::updateWithDistribution ()
 {
 	if (! alive) return;
 	
-	float distance = sqrt (pow (body.x - px, 2) + pow (body.y - py, 2));
+	float distance = sqrt (pow (body.x - x, 2) + pow (body.y - y, 2));
 	float factor = bodyAttractFactor * 2 / pow (distance, gravitationFactor);
-	float addX = (body.x-px) * factor;
-	float addY = (body.y-py) * factor;
+	if (realtimeMotion) { factor *= delay / realtimeDelay; }
+	float addX = (body.x-x) * factor;
+	float addY = (body.y-y) * factor;
 	
 	dx += addX; dy += addY;		
 }
@@ -1343,38 +1523,38 @@ void Particle::updateWithDistribution ()
 
 void Particle::move ()
 {
-	if (! alive) return;
+	//if (! alive) return;
 
-	dx *= (1. - particleDamping);
-	dy *= (1. - particleDamping);
+	dx *= realParticleDamping;
+	dy *= realParticleDamping;
 
-	px += dx * particleSpeedFactor;
-	py += dy * particleSpeedFactor;
+	x += dx * realParticleSpeed;
+	y += dy * realParticleSpeed;
 
-	if (borderMode == MIRROR_BORDERS) {
-		int mx = 0;
-		while (px < 0 || px >= graphicsWidth) {
-			if (px < 0) { px = -px; } else if (px >= graphicsWidth) { px = 2*graphicsWidth-px-1; }
-			dx = -dx;
-			mx++;
-		}
+	// if (borderMode == MIRROR_BORDERS) {
+	// 	int mx = 0;
+	// 	while (x < 0 || x >= graphicsWidth) {
+	// 		if (x < 0) { x = -x; } else if (x >= graphicsWidth) { x = 2*graphicsWidth-x-1; }
+	// 		dx = -dx;
+	// 		mx++;
+	// 	}
 
-		int my = 0;
-		while (py < 0 || py >= graphicsHeight) {
-			if (py < 0) { py = -py; } else if (py >= graphicsHeight) { py = 2*graphicsHeight-py-1; }
-			dy = -dy;
-			my++;
-		}
-	}
+	// 	int my = 0;
+	// 	while (y < 0 || y >= graphicsHeight) {
+	// 		if (y < 0) { y = -y; } else if (y >= graphicsHeight) { y = 2*graphicsHeight-y-1; }
+	// 		dy = -dy;
+	// 		my++;
+	// 	}
+	// }
 }
 
 
 void Particle::apply ()
 {
-	if (! alive) return;
+	//if (! alive) return;
 
-	if (borderMode == MIRROR_BORDERS || (px >= 0 && px < graphicsWidth && py >= 0 && py < graphicsHeight))
-	{ pixels[((int)px) + ((int)py) * graphicsWidth]++; }
+	if (x >= 0 && x < graphicsWidth && y >= 0 && y < graphicsHeight) // borderMode == MIRROR_BORDERS || 
+	{ pixels[((int)x) + ((int)y) * graphicsWidth]++; }
 }
 
 
@@ -1525,12 +1705,70 @@ void Screen::swap () {
 }
 
 
+
+// PARAMETERS
+
+void openOutputParameterFile (std::string filename) {
+	if (outputParameterFile.is_open()) { closeOutputParameterFile(); }
+	gettimeofday (&parameterTimer, NULL);
+	outputParameterFile.open (filename, std::ios::out | std::ios::trunc);
+	if (outputParameterFile) { std::cout << "WRITE PARAMETER SEQUENCE: " << filename << std::endl; } else { std::cerr << "CANNOT WRITE PARAMETER SEQUENCE: " << filename << std::endl; }	
+}
+
+void writeOutputParameterFile ()
+{
+		for (int p = 0; p < PARAMETER_NUMBER; p++) { setParameter (p, getParameter (p)); }
+}
+
+void closeOutputParameterFile () { outputParameterFile.close(); }
+
+
+void openInputParameterFile (std::string filename) {
+	if (inputParameterFile.is_open()) { closeInputParameterFile(); }
+	gettimeofday (&parameterTimer, NULL);
+	inputParameterFile.open (filename, std::ios::in);
+
+	if (inputParameterFile) { std::cout << "READ PARAMETER SEQUENCE: " << filename << std::endl; } else { std::cerr << "CANNOT READ PARAMETER SEQUENCE: " << filename << std::endl; }	
+	std::getline (inputParameterFile, inputParameterLine);
+}
+
+void readInputParameterFile ()
+{
+	struct timeval readTimer;
+	gettimeofday (&readTimer, NULL);
+	double currentTimestamp = (readTimer.tv_sec - parameterTimer.tv_sec) + (float) (readTimer.tv_usec - parameterTimer.tv_usec) / MILLION;
+
+	std::istringstream iss;
+	double timestamp;
+	std::string name;
+	double value;
+
+	if (! inputParameterFile) return;
+	iss = std::istringstream (inputParameterLine);
+	iss >> timestamp >> name >> value;
+
+	while (timestamp <= currentTimestamp) {
+		if (name == "particlePositions") { loadParticles (value); }
+		else { setParameter (getParameterId (name), value); }
+		
+		std::getline (inputParameterFile, inputParameterLine);
+
+		if (! inputParameterFile) break;		
+		iss = std::istringstream (inputParameterLine);
+		iss >> timestamp >> name >> value;
+	}
+}
+
+void closeInputParameterFile () { inputParameterFile.close(); }
+
+
 void setupParameters ()
 {
 	Parameter p;
 
 	p.id       = PARTICLE_DAMPING;
-	p.name     = "[d] particle damping";
+	p.name     = "particleDamping";
+	p.str      = "[d] particle damping";
 	p.scancode = SDL_SCANCODE_D;
 	p.keycode  = SDLK_d;
 	p.max      = 1;
@@ -1543,7 +1781,8 @@ void setupParameters ()
 	parameters.push_back (p);
 
 	p.id       = PARTICLE_SPEED;
-	p.name     = "[s] particle speed";
+	p.name     = "particleSpeed";
+	p.str      = "[s] particle speed";
 	p.scancode = SDL_SCANCODE_S;
 	p.keycode  = SDLK_s;
 	p.max      = FLT_MAX;
@@ -1556,7 +1795,8 @@ void setupParameters ()
 	parameters.push_back (p);
 
 	p.id       = GRAVITATION_FACTOR;
-	p.name     = "[f] gravitation factor";
+	p.name     = "gravitationFactor";
+	p.str      = "[f] gravitation factor";
 	p.scancode = SDL_SCANCODE_F;
 	p.keycode  = SDLK_f;
 	p.max      = FLT_MAX;
@@ -1569,33 +1809,64 @@ void setupParameters ()
 	parameters.push_back (p);
 
 	p.id       = GRAVITATION_ANGLE;
-	p.name     = "[a] gravitation angle";
+	p.name     = "gravitationAngle";
+	p.str      = "[a] gravitation angle";
 	p.scancode = SDL_SCANCODE_Q;
 	p.keycode  = SDLK_a;
 	p.max      = FLT_MAX;
-	p.aadd     = 10;
+	p.aadd     = 5;
 	p.add      = 1;
 	p.sub      = -1;
-	p.ssub     = -10;
+	p.ssub     = -5;
 	p.min      = -FLT_MAX;
 	p.physics  = false;
 	parameters.push_back (p);
 
-	p.id       = BODY_WEIGHT;
-	p.name     = "[w] body weight";
-	p.scancode = SDL_SCANCODE_Z;
-	p.keycode  = SDLK_w;
-	p.max      = FLT_MAX;
+	p.id       = BODY_X;
+	p.name     = "bodyX";
+	p.str      = "body X";
+	p.scancode = SDL_SCANCODE_X;
+	p.keycode  = SDLK_x;
+	p.max      = 1;
 	p.aadd     = 0.1;
 	p.add      = 0.01;
 	p.sub      = -0.01;
 	p.ssub     = -0.1;
+	p.min      = 0;
+	p.physics  = false;
+	parameters.push_back (p);
+
+	p.id       = BODY_Y;
+	p.name     = "bodyY";
+	p.str      = "body Y";
+	p.scancode = SDL_SCANCODE_Y;
+	p.keycode  = SDLK_y;
+	p.max      = 1;
+	p.aadd     = 0.1;
+	p.add      = 0.01;
+	p.sub      = -0.01;
+	p.ssub     = -0.1;
+	p.min      = 0;
+	p.physics  = false;
+	parameters.push_back (p);
+
+	p.id       = BODY_WEIGHT;
+	p.name     = "bodyWeight";
+	p.str      = "[w] body weight";
+	p.scancode = SDL_SCANCODE_Z;
+	p.keycode  = SDLK_w;
+	p.max      = FLT_MAX;
+	p.aadd     = 5;
+	p.add      = 1;
+	p.sub      = -1;
+	p.ssub     = -5;
 	p.min      = -FLT_MAX;
 	p.physics  = false;
 	parameters.push_back (p);
 
 	p.id       = BODY_RADIUS;
-	p.name     = "[r] body radius";
+	p.name     = "bodyRadius";
+	p.str      = "[r] body radius";
 	p.scancode = SDL_SCANCODE_R;
 	p.keycode  = SDLK_r;
 	p.max      = FLT_MAX;
@@ -1608,7 +1879,8 @@ void setupParameters ()
 	parameters.push_back (p);
 
 	p.id       = BODY_ATTRACT_FACTOR;
-	p.name     = "[f1] body attract factor";
+	p.name     = "bodyAttractFactor";
+	p.str      = "[f1] body attract factor";
 	p.scancode = SDL_SCANCODE_F1;
 	p.keycode  = SDLK_F1;
 	p.max      = FLT_MAX;
@@ -1621,7 +1893,8 @@ void setupParameters ()
 	parameters.push_back (p);
 
 	p.id       = BODY_REPEL_FACTOR;
-	p.name     = "[f2] body repel factor";
+	p.name     = "bodyRepelFactor";
+	p.str      = "[f2] body repel factor";
 	p.scancode = SDL_SCANCODE_F2;
 	p.keycode  = SDLK_F2;
 	p.max      = FLT_MAX;
@@ -1634,7 +1907,8 @@ void setupParameters ()
 	parameters.push_back (p);
 
 	p.id       = PIXEL_INTENSITY;
-	p.name     = "[i] pixel intensity";
+	p.name     = "pixelIntensity";
+	p.str      = "[i] pixel intensity";
 	p.scancode = SDL_SCANCODE_I;
 	p.keycode  = SDLK_i;
 	p.max      = 1;
@@ -1646,18 +1920,27 @@ void setupParameters ()
 	p.physics  = false;
 	parameters.push_back (p);
 
-	for (int p = 0; p < PARAMETER_NUMBER; p++) { parameters[p].moy = getParameterValue (p); }
+	for (int p = 0; p < PARAMETER_NUMBER; p++) { parameters[p].moy = getParameter (p); }
 }
 
 
 
-float getParameterValue (int parameter)
+int getParameterId (std::string name)
+{
+	for (int p = 0; p < PARAMETER_NUMBER; p++) { if (parameters[p].name == name) return p; }
+	return -1;
+}
+
+
+float getParameter (int parameter)
 {
 	switch (parameter) {
 	case PARTICLE_DAMPING    : return particleDamping;
 	case PARTICLE_SPEED      : return particleSpeed;
 	case GRAVITATION_FACTOR  : return gravitationFactor;
 	case GRAVITATION_ANGLE   : return gravitationAngle;
+	case BODY_X              : return bodyX;
+	case BODY_Y              : return bodyY;
 	case BODY_WEIGHT         : return bodyWeight;
 	case BODY_RADIUS         : return bodyRadius;
 	case BODY_ATTRACT_FACTOR : return bodyAttractFactor;
@@ -1668,24 +1951,34 @@ float getParameterValue (int parameter)
 }
 
 
-void setParameterValue (int parameter, float value)
+void setParameter (int parameter, float value)
 {
 	switch (parameter) {
 	case PARTICLE_DAMPING    : particleDamping = value;   break;
 	case PARTICLE_SPEED      : particleSpeed = value;     break;
 	case GRAVITATION_FACTOR  : gravitationFactor = value; break;
 	case GRAVITATION_ANGLE   : gravitationAngle = value;  break;
+	case BODY_X              : bodyX = value;             break;
+	case BODY_Y              : bodyY = value;             break;
 	case BODY_WEIGHT         : bodyWeight = value;        break;
 	case BODY_RADIUS         : bodyRadius = value;        break;
 	case BODY_ATTRACT_FACTOR : bodyAttractFactor = value; break;
 	case BODY_REPEL_FACTOR   : bodyRepelFactor = value;   break;
-	case PIXEL_INTENSITY     : pixelIntensity = value;   break;
+	case PIXEL_INTENSITY     : pixelIntensity = value;    break;
 	}
+
 	if (parameters[parameter].physics) { setupPhysics(); }
+
+	if (recordParameters) {
+		struct timeval recordTimer;
+		gettimeofday (&recordTimer, NULL);
+		double timestamp = (recordTimer.tv_sec - parameterTimer.tv_sec) + (float) (recordTimer.tv_usec - parameterTimer.tv_usec) / MILLION;
+		outputParameterFile << timestamp << " " << parameters[parameter].name << " " << value << "\n";
+	}
 }
 
 
-void addParameterValue (int parameter, float value) { setParameterValue (parameter, getParameterValue (parameter) + value); }
+void addParameter (int parameter, float value) { setParameter (parameter, getParameter (parameter) + value); }
 
 
 
@@ -1771,7 +2064,7 @@ void InstantaneousVariation::start ()
 float InstantaneousVariation::step (float delay)
 {
 	stopped = true;
-	setParameterValue (parameter, endValue);
+	setParameter (parameter, endValue);
 
 	Event::step (0);
 	return (delay);
@@ -1790,7 +2083,7 @@ void LinearVariation::start ()
 {
 	std::cout << "START LINEAR VARIATION ON " << parameters[parameter].name << std::endl;
 	Event::start ();
-	startValue = getParameterValue (parameter);
+	startValue = getParameter (parameter);
 }
 
 float LinearVariation::step (float delay)
@@ -1802,7 +2095,7 @@ float LinearVariation::step (float delay)
 	}
 	
 	float stepValue = (currentTime + stepDelay - startTime) / duration * (endValue - startValue) + startValue;
-	setParameterValue (parameter, stepValue);
+	setParameter (parameter, stepValue);
 
 	Event::step (stepDelay);
 	return (delay - stepDelay);
@@ -1821,7 +2114,7 @@ void SinusoidalVariation::start ()
 {
 	std::cout << "START SINUSOIDAL VARIATION ON " << parameters[parameter].name << std::endl;
 	Event::start();
-	startValue = getParameterValue (parameter);
+	startValue = getParameter (parameter);
 	endValue = startValue + amplitude;
 }
 
@@ -1834,7 +2127,7 @@ float SinusoidalVariation::step (float delay)
 	}
 	
 	float stepValue = startValue + (endValue - startValue) * cos ((currentTime + stepDelay - startTime) / frequency * 2 * PI);
-	setParameterValue (parameter, stepValue);
+	setParameter (parameter, stepValue);
 
 	Event::step (stepDelay);
 	return (delay - stepDelay);
@@ -1854,7 +2147,7 @@ void SawtoothVariation::start ()
 {
 	std::cout << "START SAWTOOTH VARIATION ON " << parameters[parameter].name << std::endl;
 	Event::start();
-	startValue = getParameterValue (parameter);
+	startValue = getParameter (parameter);
 	intermediateTime = startTime;
 }
 
@@ -1870,7 +2163,7 @@ float SawtoothVariation::step (float delay)
 	while (intermediateTime - startTime > frequency) { intermediateTime -= frequency; }
 
 	float stepValue = startValue + (frequency - (intermediateTime - startTime)) / frequency * (endValue - startValue);
-	setParameterValue (parameter, stepValue);
+	setParameter (parameter, stepValue);
 
 	Event::step (stepDelay);
 	return (delay - stepDelay);
