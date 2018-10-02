@@ -5,10 +5,17 @@ Moving Cells is a digital installation building on a depth sensor to allow spect
 The current version of the program is implemented on Kinect for Windows v2 (K4W2) through the open source driver [libreenect2](https://github.com/OpenKinect/libfreenect2). Note that this sensor also requires a USB 3.0 controller.
 
 ## Installation on Linux
+
 * Install [libreenect2](https://github.com/OpenKinect/libfreenect2).
+
 * Install OpenCV:
 ```
 sudo apt-get install libopencv-dev
+```
+
+* Install OpenAL and libsndfile:
+```
+sudo apt-get install libopenal-dev libalut-dev libsndfile1-dev
 ```
 
 * Clone the project:
@@ -30,6 +37,8 @@ Note that you might need to adjust `CMAKE_PREFIX_PATH` in `CMakeLists.txt` to fi
 * Run the programs:
 ```
 ./bin/moving-cells
+./bin/static-cells
+./bin/singing-cells
 ./bin/time-delays
 ./bin/time-ghosts
 ```
