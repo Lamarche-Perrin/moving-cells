@@ -53,7 +53,7 @@
 #define VERBOSE 0
 
 bool displayCloud         = true;
-bool displaySDL           = true;
+//bool displaySDL           = true;
 bool displayFullscreen    = true;
 bool displayParameters    = true;
 bool displayMouse         = true;
@@ -71,19 +71,19 @@ float frameLogFrequency   = 2.;
 int frameFrequency        = 1;
 int frameLimit            = 0; //4096+1;
 
-int graphicsWidth         = 1280; //1920; //1024; //540*2; //640;
-int graphicsHeight        = 720; //1080; //768; //960; //768;
-int threadNumber          = 6;
+int graphicsWidth         = 1920; //1920; //1024; //540*2; //640;
+int graphicsHeight        = 1080; //1080; //768; //960; //768;
+int threadNumber          = 8;
 
 int borderMode            = NO_BORDERS;
 int mouseMode             = SWITCH_ON_CLICK;
 int particleInitMode      = UNIFORM_INIT;
-bool equationMotion       = true;
+//bool equationMotion       = true;
 
-int particleNumber        = 1280*720/8; // 259200
-float particleWeight      = 0.0005;
-float particleSpeed       = 0.001;
-float particleDamping     = 0.02;
+int particleNumber        = 1920*1080/9; // 259200
+float particleWeight      = 1.;
+//float particleSpeed       = 0.001;
+float particleDamping     = 1;
 
 float gravitationFactor   = 0;
 float timeFactor          = 1;
@@ -93,8 +93,8 @@ float bodyX               = 0.5;
 float bodyY               = 0.5;
 float bodyWeight          = 0.;
 float bodyRadius          = 0.;
-float bodyAttractFactor   = 1.;
-float bodyRepelFactor     = 1.;
+// float bodyAttractFactor   = 1.;
+// float bodyRepelFactor     = 1.;
 
 RgbColor particleColorMin = RgbColor (  0,   0,   0);
 RgbColor particleColorMoy = RgbColor (  3,   6,  16);
@@ -106,12 +106,12 @@ float particleRatioMax    = 1000.;
 
 float pixelIntensity      = 1;
 
-bool withScreens          = false;
+//bool withScreens          = false;
 
-bool withStencil          = false;
+//bool withStencil          = false;
 
-bool withDistribution     = true;
-float distributionParticleDamping = 0.05;
+//bool withDistribution     = true;
+//float distributionParticleDamping = 0.05;
 
 bool withFixedBody        = false;
 float fixedBodyX          = 1./3;
@@ -122,11 +122,11 @@ bool withSymmetricBody    = false;
 
 const int maxParticleNumber   = 600000;
 const float maxParticleSpeed  = 1000000;
-const int maxThreadNumber     = 8;
+const int maxThreadNumber     = 16;
 
 //std::string parameterFilename    = "static-cells-parameter-sequence.csv";
-std::string stencilFilename      = "../tools/stencil.test.png";
-std::string distributionFilename = "../tools/distribution.brain.csv";
+//std::string stencilFilename      = "../tools/stencil.test.png";
+//std::string distributionFilename = "../tools/distribution.brain.csv";
 
 
 // VARIABLES
@@ -134,8 +134,8 @@ std::string distributionFilename = "../tools/distribution.brain.csv";
 #define BILLION 1000000000L;
 #define PI 3.14159265
 
-bool connectedBodies = true;
-bool distributedBodies = false;
+//bool connectedBodies = true;
+//bool distributedBodies = false;
 int graphicsFps = 0;
 
 float savedGravitationDamping = particleDamping;
@@ -158,15 +158,25 @@ ParameterVector parameters;
 bool stop;
 int pixelNumber;
 float gravitationDistanceFactor;
-float particleSpeedFactor;
+//float particleSpeedFactor;
 
-float realGravitationFactor;
-float realBodyRadius;
-float realBodyX;
-float realBodyY;
-float realBodyWeight;
-float realParticleDamping;
-float realParticleSpeed;
+float rDistance;
+float rDelay;
+float rGravitationFactor;
+float rGravitationFactorPlusOne;
+float rGravitationAngle;
+float rBodyRadius;
+float rBodyX;
+float rBodyY;
+float rBodyWeight;
+float rParticleDamping;
+//float rParticleSpeed;
+
+float rPixelSize;
+float rWidthBorder;
+float rWidthBorderDoubled;
+float rHeightBorder;
+float rHeightBorderDoubled;
 
 struct timeval startTimer, endTimer, parameterTimer;
 int frameNb;
@@ -188,7 +198,7 @@ int *particleBlueArray;
 float bodyLeftWeight, bodyRightWeight, bodyTopWeight, bodyBottomWeight;
 
 EventList events;
-cv::Mat stencilFrame;
+//cv::Mat stencilFrame;
 
 
 // SCREEN VARIABLES
@@ -200,9 +210,9 @@ std::exponential_distribution<float> distribution (1./rate);
 float cfmin = 0.5;
 float sfmax = 0.5;
 
-ScreenVector screens;
-int screenNb;
-int delayMax = 1;
+// ScreenVector screens;
+// int screenNb;
+//int delayMax = 1;
 
 
 // THREAD VARIABLES
@@ -227,6 +237,7 @@ int main (int argc, char *argv[])
 	if (argc > 1) { configFilename = argv[1]; }
 	if (argc > 2) { outputFilename = argv[2]; }
 
+	updatePhysics ();
 	setup ();
 	if (displayCloud) draw();
 
@@ -239,9 +250,10 @@ int main (int argc, char *argv[])
 #if VERBOSE
 		std::cout << "FRAME NUMBER " << frameNb << std::endl;
 #endif
-		
-		if (connectedBodies) computeBodies();
-		if (distributedBodies) computeDistributedBodies();
+
+		updatePhysics ();
+		//if (connectedBodies) computeBodies();
+		//if (distributedBodies) computeDistributedBodies();
 		computeParticles();
 		draw();
 
@@ -272,41 +284,41 @@ Body::Body () {
 }
 
 
-void mouseEvents (int event, int x, int y, int flags, void *userdata)
-{
-	if (withFixedBody) return;
+// void mouseEvents (int event, int x, int y, int flags, void *userdata)
+// {
+// 	if (withFixedBody) return;
 						   
-	if (event == cv::EVENT_MOUSEMOVE)
-	{
-		setParameter (BODY_X, ((double) x) / graphicsWidth);
-		setParameter (BODY_Y, ((double) y) / graphicsHeight);
-	}
+// 	if (event == cv::EVENT_MOUSEMOVE)
+// 	{
+// 		setParameter (BODY_X, ((float) x) / graphicsWidth);
+// 		setParameter (BODY_Y, ((float) y) / graphicsHeight);
+// 	}
 
-	else {
-		if (mouseMode == SWITCH_ON_CLICK) {
-			if (event == cv::EVENT_LBUTTONDOWN)
-				connectedBodies = !connectedBodies;
-		}
+// 	else {
+// 		if (mouseMode == SWITCH_ON_CLICK) {
+// 			if (event == cv::EVENT_LBUTTONDOWN)
+// 				connectedBodies = !connectedBodies;
+// 		}
 
-		else if (mouseMode == KEEP_PRESSED) {
-			if (event == cv::EVENT_LBUTTONDOWN) {
-				connectedBodies = true;
-			}
+// 		else if (mouseMode == KEEP_PRESSED) {
+// 			if (event == cv::EVENT_LBUTTONDOWN) {
+// 				connectedBodies = true;
+// 			}
 
-			else if (event == cv::EVENT_LBUTTONUP) {
-				connectedBodies = false;
-			}
+// 			else if (event == cv::EVENT_LBUTTONUP) {
+// 				connectedBodies = false;
+// 			}
 			
-			if (event == cv::EVENT_RBUTTONDOWN) {
-				connectedBodies = true;
-			}
+// 			if (event == cv::EVENT_RBUTTONDOWN) {
+// 				connectedBodies = true;
+// 			}
 
-			else if (event == cv::EVENT_RBUTTONUP) {
-				connectedBodies = false;
-			}
-		}
-	}
-}
+// 			else if (event == cv::EVENT_RBUTTONUP) {
+// 				connectedBodies = false;
+// 			}
+// 		}
+// 	}
+// }
 
 
 
@@ -315,10 +327,8 @@ void setup ()
 	srand (time (0));
 
 	stop = false;
-	pixelNumber = graphicsWidth * graphicsHeight;
-
 	setupParameters();
-	if (withScreens) setupScreens();
+	//if (withScreens) setupScreens();
 	
 	// SETUP PARTICLES
 	particles = new Particle [maxParticleNumber];
@@ -328,14 +338,12 @@ void setup ()
 	particleBlueArray = new int [maxParticleNumber+1];
 	particleGreenArray = new int [maxParticleNumber+1];
 
-	setupPhysics ();
 	setupColor ();
-	if (withStencil) setupStencil();
-	if (withDistribution) setupDistribution();
+	//if (withStencil) setupStencil();
+	//if (withDistribution) setupDistribution();
 
 	if (configFilename != "") {
 		if (outputFilename == "") { outputFilename = "out/" + configFilename.substr (configFilename.rfind ("/") + 1); }
-		loadConfig (configFilename);
 	} else {
 		outputFilename = "out/static-cells-screenshot";
 	}
@@ -348,27 +356,27 @@ void setup ()
 	
 	// SETUP DISPLAY
 	if (displayCloud) {
-		if (displaySDL) {
-			if (SDL_Init(SDL_INIT_EVERYTHING) != 0) { std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl; }
+		//if (displaySDL) {
+		if (SDL_Init(SDL_INIT_EVERYTHING) != 0) { std::cerr << "Failed to initialize SDL: " << SDL_GetError() << std::endl; }
+		else {
+			int windowMode = 0;
+			if (displayFullscreen) { windowMode = SDL_WINDOW_FULLSCREEN_DESKTOP; }
+			if (SDL_CreateWindowAndRenderer (graphicsWidth, graphicsHeight, windowMode, &window, &renderer) < 0) { std::cerr << "Error creating window or renderer: " << SDL_GetError() << std::endl; SDL_Quit(); }
 			else {
-				int windowMode = 0;
-				if (displayFullscreen) { windowMode = SDL_WINDOW_FULLSCREEN_DESKTOP; }
-				if (SDL_CreateWindowAndRenderer (graphicsWidth, graphicsHeight, windowMode, &window, &renderer) < 0) { std::cerr << "Error creating window or renderer: " << SDL_GetError() << std::endl; SDL_Quit(); }
-				else {
-					texture = SDL_CreateTexture (renderer, SDL_PIXELFORMAT_BGR24, SDL_TEXTUREACCESS_STREAMING, graphicsWidth, graphicsHeight);
-					if (hideMouse) { int mouseStatus = SDL_ShowCursor (SDL_DISABLE); }
-				}
+				texture = SDL_CreateTexture (renderer, SDL_PIXELFORMAT_BGR24, SDL_TEXTUREACCESS_STREAMING, graphicsWidth, graphicsHeight);
+				if (hideMouse) { int mouseStatus = SDL_ShowCursor (SDL_DISABLE); }
 			}
-		} else {
-			if (displayFullscreen) {
-				cv::namedWindow("static-cells", CV_WINDOW_NORMAL);
-				cv::setWindowProperty ("static-cells", CV_WND_PROP_FULLSCREEN, 1);
-			} else {
-				cv::namedWindow("static-cells", CV_WINDOW_AUTOSIZE);
-			}
-		
-			cv::setMouseCallback ("static-cells", mouseEvents, NULL);
 		}
+		// } else {
+		// 	if (displayFullscreen) {
+		// 		cv::namedWindow("static-cells", CV_WINDOW_NORMAL);
+		// 		cv::setWindowProperty ("static-cells", CV_WND_PROP_FULLSCREEN, 1);
+		// 	} else {
+		// 		cv::namedWindow("static-cells", CV_WINDOW_AUTOSIZE);
+		// 	}
+		
+		// 	cv::setMouseCallback ("static-cells", mouseEvents, NULL);
+		// }
 	}
 		  
 	frame = new cv::Mat (graphicsHeight, graphicsWidth, CV_8UC3);
@@ -407,51 +415,43 @@ void setdown ()
 }
 
 
-void setupPhysics ()
-{
-	gravitationDistanceFactor = pow (sqrt (pixelNumber) / 2, gravitationFactor);
-	particleSpeedFactor = particleSpeed * sqrt (pixelNumber);
-	realBodyRadius = bodyRadius * sqrt (pixelNumber) / 2;
-}
+// void setupStencil ()
+// {
+// 	stencilFrame = cv::imread (stencilFilename, cv::IMREAD_COLOR);
+// }
 
 
-void setupStencil ()
-{
-	stencilFrame = cv::imread (stencilFilename, cv::IMREAD_COLOR);
-}
+// void setupDistribution ()
+// {
+// 	std::ifstream distributionFile (distributionFilename);
+
+// 	int x, y;
+// 	for (int i = 0; i < particleNumber; i++) {
+// 		distributionFile >> x >> y;
+// 		particles[i].body = cv::Point (x, y);
+// 	}
+
+// 	distributionFile.close ();
+// }
 
 
-void setupDistribution ()
-{
-	std::ifstream distributionFile (distributionFilename);
+// void setupScreens ()
+// {
+// 	screens.push_back (Screen ('A',    5,   0, 704, 144));
+// 	screens.push_back (Screen ('B',  987,   0, 256, 416));
+// 	screens.push_back (Screen ('C', 1351,   0, 448, 144));
+// 	screens.push_back (Screen ('D', 1808,   0, 224, 144));
+// 	screens.push_back (Screen ('E',  264, 160, 448, 256));
+// 	screens.push_back (Screen ('F', 1447, 160, 352, 256));
+// 	screens.push_back (Screen ('G',    0, 366, 255, 288));
+// 	screens.push_back (Screen ('H',  354, 429, 256, 224));
+// 	screens.push_back (Screen ('I', 1363, 429, 256, 224));
+// 	screens.push_back (Screen ('J', 1808, 360, 224, 656));
+// 	screens.push_back (Screen ('K',  170, 664, 896, 352));
+// 	screens.push_back (Screen ('L', 1265, 664, 448, 352));
 
-	int x, y;
-	for (int i = 0; i < particleNumber; i++) {
-		distributionFile >> x >> y;
-		particles[i].body = cv::Point (x, y);
-	}
-
-	distributionFile.close ();
-}
-
-
-void setupScreens ()
-{
-	screens.push_back (Screen ('A',    5,   0, 704, 144));
-	screens.push_back (Screen ('B',  987,   0, 256, 416));
-	screens.push_back (Screen ('C', 1351,   0, 448, 144));
-	screens.push_back (Screen ('D', 1808,   0, 224, 144));
-	screens.push_back (Screen ('E',  264, 160, 448, 256));
-	screens.push_back (Screen ('F', 1447, 160, 352, 256));
-	screens.push_back (Screen ('G',    0, 366, 255, 288));
-	screens.push_back (Screen ('H',  354, 429, 256, 224));
-	screens.push_back (Screen ('I', 1363, 429, 256, 224));
-	screens.push_back (Screen ('J', 1808, 360, 224, 656));
-	screens.push_back (Screen ('K',  170, 664, 896, 352));
-	screens.push_back (Screen ('L', 1265, 664, 448, 352));
-
-	screenNb = screens.size();
-}
+// 	screenNb = screens.size();
+// }
 
 void setupThreads ()
 {
@@ -589,9 +589,13 @@ void initParticles (int type)
 		for (int i = 0; i < particleNumber; i++)
 		{
 			Particle *particle = &particles[i];
-			particle->x = rand() % graphicsWidth;
-			particle->y = rand() % graphicsHeight;
-			particle->dx = particle->dy = 0;
+			float rX = rand() % graphicsWidth;
+			float rY = rand() % graphicsHeight;
+
+			particle->x = rX / rDistance;
+			particle->y = rY / rDistance;
+			particle->dx = 0;
+			particle->dy = 0;
 		}	
 	}
 	break;
@@ -600,22 +604,28 @@ void initParticles (int type)
 	{
 		int index = 0;
 		float bin = sqrt((float)(graphicsWidth*graphicsHeight)/particleNumber);
-		for (float x = bin/2; x <= graphicsWidth - bin/2; x += bin)
+		for (float rX = bin/2; rX <= graphicsWidth - bin/2; rX += bin)
 		{
-			for (float y = bin/2; y <= graphicsHeight - bin/2; y += bin)
+			for (float rY = bin/2; rY <= graphicsHeight - bin/2; rY += bin)
 			{
 				Particle *particle = &particles[index++];
-				particle->x = x;
-				particle->y = y;
-				particle->dx = particle->dy = 0;
+				
+				particle->x = rX / rDistance;
+				particle->y = rY / rDistance;
+				particle->dx = 0;
+				particle->dy = 0;
 			}
 		}
 
 		for (int i = index; i < particleNumber; i++) {
 			Particle *particle = &particles[i];
-			particle->x = rand() % graphicsWidth;
-			particle->y = rand() % graphicsHeight;
-			particle->dx = particle->dy = 0;
+			float rX = rand() % graphicsWidth;
+			float rY = rand() % graphicsHeight;
+
+			particle->x = rX / rDistance;
+			particle->y = rY / rDistance;
+			particle->dx = 0;
+			particle->dy = 0;
 		}
 	}
 	break;
@@ -626,96 +636,79 @@ void initParticles (int type)
 float linearMap (float value, float min1, float max1, float min2, float max2) { return (value - min1) * (max2 - min2) / (max1 - min1) + min2; }
 
 
-void computeBodies ()
+void updatePhysics ()
 {
-#if VERBOSE
-	std::cout << "BEGIN compute bodies" << std::endl;
-#endif
+	pixelNumber = graphicsWidth * graphicsHeight;
+	rDelay = delay * timeFactor;
+	rDistance = sqrt (pixelNumber);
 
-	realGravitationFactor = gravitationFactor + 1;
-	realBodyX = bodyX * graphicsWidth;
-	realBodyY = bodyY * graphicsHeight;
-	realBodyWeight = bodyWeight * gravitationDistanceFactor * delay / realtimeDelay;
-	realParticleDamping = pow (1. - particleDamping, delay / realtimeDelay);
-	realParticleSpeed = particleSpeedFactor * delay / realtimeDelay;
+	rPixelSize = 1 / rDistance;
+	rWidthBorder = graphicsWidth / rDistance;
+	rWidthBorderDoubled = rWidthBorder * 2;
+	rHeightBorder = graphicsHeight / rDistance;
+	rHeightBorderDoubled = rHeightBorder * 2;
 
-	// UPDATE PARTICLES
-	if (equationMotion) {
-		for (int i = 0; i < threadNumber; i++)
-		{
-			int rc = pthread_create(&threads[i], NULL, updateAndMoveParticles, (void *) (intptr_t) i);
-			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
-		}
-
-		for (int i = 0; i < threadNumber; i++)
-		{
-			int rc = pthread_join (threads[i], &status);
-			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
-		}		
-	}
-
-	else {
-		for (int i = 0; i < threadNumber; i++)
-		{
-			int rc = pthread_create(&threads[i], NULL, updateParticles, (void *) (intptr_t) i);
-			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
-		}
-
-		for (int i = 0; i < threadNumber; i++)
-		{
-			int rc = pthread_join (threads[i], &status);
-			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
-		}		
-	}
+	//std::cout << rWidthBorder << " " << rHeightBorder << std::endl;
 	
-#if VERBOSE
-	std::cout << "-> END compute bodies" << std::endl;
-#endif
+	rGravitationFactor = gravitationFactor / 2;
+	rGravitationFactorPlusOne = (gravitationFactor + 1) / 2;
+	rGravitationAngle = gravitationAngle * PI / 180;
+
+	rBodyX = bodyX * rDistance;
+	rBodyY = bodyY * rDistance;
+	rBodyWeight = bodyWeight * gravitationDistanceFactor * delay / realtimeDelay;
+	rBodyRadius = bodyRadius * sqrt (pixelNumber) / 2;
+
+	rParticleDamping = particleDamping / particleWeight;
+	//rParticleSpeed = particleSpeedFactor * delay / realtimeDelay;
+
+	gravitationDistanceFactor = pow (rDistance / 2, gravitationFactor);
+	//particleSpeedFactor = particleSpeed * rDistance;
 }
 
 
-void computeDistributedBodies ()
-{
-#if VERBOSE
-	std::cout << "BEGIN compute distributed bodies" << std::endl;
-#endif
+// void computeDistributedBodies ()
+// {
+// #if VERBOSE
+// 	std::cout << "BEGIN compute distributed bodies" << std::endl;
+// #endif
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_create(&threads[i], NULL, updateParticlesWithDistribution, (void *) (intptr_t) i);
-		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
-	}
+// 	for (int i = 0; i < threadNumber; i++)
+// 	{
+// 		int rc = pthread_create(&threads[i], NULL, updateParticlesWithDistribution, (void *) (intptr_t) i);
+// 		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+// 	}
 
-#if VERBOSE
-	std::cout << "-> END compute distributed bodies" << std::endl;
-#endif
-}
+// #if VERBOSE
+// 	std::cout << "-> END compute distributed bodies" << std::endl;
+// #endif
+// }
 
 
 void computeParticles ()
 {
 	// MOVE PARTICLES
-#if VERBOSE
-	std::cout << "BEGIN move particles" << std::endl;
-#endif
+// #if VERBOSE
+// 	std::cout << "BEGIN move particles" << std::endl;
+// #endif
 
-	if (! equationMotion) {
-		for (int i = 0; i < threadNumber; i++)
-		{
-			int rc = pthread_create(&threads[i], NULL, moveParticles, (void *) (intptr_t) i);
-			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
-		}
+	// if (! equationMotion) {
+	// 	for (int i = 0; i < threadNumber; i++)
+	// 	{
+	// 		int rc = pthread_create(&threads[i], NULL, moveParticles, (void *) (intptr_t) i);
+	// 		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+	// 	}
 
-		for (int i = 0; i < threadNumber; i++)
-		{
-			int rc = pthread_join (threads[i], &status);
-			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
-		}
-	}
+	// 	for (int i = 0; i < threadNumber; i++)
+	// 	{
+	// 		int rc = pthread_join (threads[i], &status);
+	// 		if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+	// 	}
+	// }
 	
-#if VERBOSE
-	std::cout << "-> END move particles" << std::endl;
-#endif
+// #if VERBOSE
+// 	std::cout << "-> END move particles" << std::endl;
+// #endif
 
 	// CLEAR PIXELS
 #if VERBOSE
@@ -738,25 +731,62 @@ void computeParticles ()
 	std::cout << "-> END clear pixels" << std::endl;
 #endif
 
-	// APPLY PARTICLES TO PIXELS
-#if VERBOSE
-	std::cout << "BEGIN apply particles" << std::endl;
+// 	// APPLY PARTICLES TO PIXELS
+// #if VERBOSE
+// 	std::cout << "BEGIN apply particles" << std::endl;
+// #endif
+
+// 	for (int i = 0; i < threadNumber; i++)
+// 	{
+// 		int rc = pthread_create(&threads[i], NULL, applyParticles, (void *) (intptr_t) i);
+// 		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+// 	}
+
+// 	for (int i = 0; i < threadNumber; i++)
+// 	{
+// 		int rc = pthread_join (threads[i], &status);
+// 		if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+// 	}
+
+// #if VERBOSE
+// 	std::cout << "-> END apply particles" << std::endl;
+// #endif
+
+	#if VERBOSE
+	std::cout << "BEGIN compute bodies" << std::endl;
 #endif
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_create(&threads[i], NULL, applyParticles, (void *) (intptr_t) i);
-		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
-	}
+	// UPDATE PARTICLES
+	//if (equationMotion) {
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_create(&threads[i], NULL, updateAndMoveParticles, (void *) (intptr_t) i);
+			if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+		}
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_join (threads[i], &status);
-		if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
-	}
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_join (threads[i], &status);
+			if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+		}		
+//}
 
+	// else {
+	// 	for (int i = 0; i < threadNumber; i++)
+	// 	{
+	// 		int rc = pthread_create(&threads[i], NULL, updateParticles, (void *) (intptr_t) i);
+	// 		if (rc) { std::cout << "Error:unable to create thread," << rc << std::endl; exit(-1); }
+	// 	}
+
+	// 	for (int i = 0; i < threadNumber; i++)
+	// 	{
+	// 		int rc = pthread_join (threads[i], &status);
+	// 		if (rc) { std::cout << "Error:unable to join," << rc << std::endl; exit(-1); }
+	// 	}		
+	// }
+	
 #if VERBOSE
-	std::cout << "-> END apply particles" << std::endl;
+	std::cout << "-> END compute bodies" << std::endl;
 #endif
 
 	// CLEAR PIXELS TO FRAME
@@ -784,20 +814,22 @@ void computeParticles ()
 
 void draw ()
 {
-	if (withScreens) {
-		finalFrame = cv::Mat (graphicsHeight, graphicsWidth, CV_8UC3, cv::Scalar(0,0,0));
-		for (int s = 0; s < screenNb; s++) {
-			cv::Mat truncated (*frame, screens[s].srect);
-			truncated.copyTo (finalFrame (screens[s].srect));
-		}
-	} else { finalFrame = frame->clone(); }
+	// if (withScreens) {
+	// 	finalFrame = cv::Mat (graphicsHeight, graphicsWidth, CV_8UC3, cv::Scalar(0,0,0));
+	// 	for (int s = 0; s < screenNb; s++) {
+	// 		cv::Mat truncated (*frame, screens[s].srect);
+	// 		truncated.copyTo (finalFrame (screens[s].srect));
+	// 	}
+	// } else {
+	finalFrame = frame->clone();
+	//}
 	
-	if (withStencil) {
-		finalFrame = finalFrame.mul (stencilFrame, 1./128);
-	}
+	// if (withStencil) {
+	// 	finalFrame = finalFrame.mul (stencilFrame, 1./128);
+	// }
 
 	if (displayMouse) {
-		cv::circle (finalFrame, cv::Point(realBodyX,realBodyY), 1, cv::Scalar(250,200,100), 3);
+		cv::circle (finalFrame, cv::Point(rBodyX,rBodyY), 1, cv::Scalar(250,200,100), 3);
 	}
 		
 	if (displayParameters)
@@ -850,457 +882,453 @@ void draw ()
 
 	}
 
-	if (withScreens)
-		for (int s = 0; s < screenNb; s++)
-			cv::rectangle (finalFrame, screens[s].srectp, cv::Scalar (0, 0, 255));
+	// if (withScreens)
+	// 	for (int s = 0; s < screenNb; s++)
+	// 		cv::rectangle (finalFrame, screens[s].srectp, cv::Scalar (0, 0, 255));
 }
 
 
 void display ()
 {
-	if (displaySDL) {
-		unsigned char *texture_data = NULL;
-		int texture_pitch = 0;
+	// if (displaySDL) {
+	unsigned char *texture_data = NULL;
+	int texture_pitch = 0;
 
-		SDL_LockTexture (texture, 0, (void **) &texture_data, &texture_pitch);
-		memcpy (texture_data, (void *) finalFrame.data, finalFrame.cols * finalFrame.rows * finalFrame.channels());
-		SDL_UnlockTexture (texture);
+	SDL_LockTexture (texture, 0, (void **) &texture_data, &texture_pitch);
+	memcpy (texture_data, (void *) finalFrame.data, finalFrame.cols * finalFrame.rows * finalFrame.channels());
+	SDL_UnlockTexture (texture);
 	
-		SDL_RenderClear (renderer);
-		SDL_RenderCopy (renderer, texture, NULL, NULL);
-		SDL_RenderPresent (renderer);
+	SDL_RenderClear (renderer);
+	SDL_RenderCopy (renderer, texture, NULL, NULL);
+	SDL_RenderPresent (renderer);
 
-		const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
-		while (SDL_PollEvent (&event))
+	const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
+	while (SDL_PollEvent (&event))
+	{
+		switch (event.type)
 		{
-            switch (event.type)
-            {
-				// Mouse events
-			case SDL_MOUSEBUTTONDOWN :
-				switch (event.button.button)
+			// Mouse events
+		case SDL_MOUSEBUTTONDOWN :
+			switch (event.button.button)
+			{
+			case SDL_BUTTON_LEFT :
+				switch (mouseMode)
 				{
-				case SDL_BUTTON_LEFT :
-					switch (mouseMode)
-					{
-					case KEEP_PRESSED : connectedBodies = true; break;
-					case SWITCH_ON_CLICK : connectedBodies = !connectedBodies; break;
-					}
-					break;
-					
-				case SDL_BUTTON_RIGHT :
-					break;
-
-				case SDL_BUTTON_MIDDLE :
-					for (int p = 0; p < PARAMETER_NUMBER; p++) {
-						if (keyboard[parameters[p].scancode]) { setParameter (p, parameters[p].moy); }
-					}
-					break;
+					//case KEEP_PRESSED : connectedBodies = true; break;
+					//case SWITCH_ON_CLICK : connectedBodies = !connectedBodies; break;
 				}
+				break;
+					
+			case SDL_BUTTON_RIGHT :
+				break;
+
+			case SDL_BUTTON_MIDDLE :
+				for (int p = 0; p < PARAMETER_NUMBER; p++) {
+					if (keyboard[parameters[p].scancode]) { setParameter (p, parameters[p].moy); }
+				}
+				break;
+			}
+			break;
+				
+		case SDL_MOUSEBUTTONUP:
+			switch (event.button.button)
+			{
+				switch (mouseMode)
+				{
+					//case KEEP_PRESSED : connectedBodies = false; break;
+					//case SWITCH_ON_CLICK : break;
+				}
+				break;
+					
+			case SDL_BUTTON_RIGHT:
+				break;
+			}
+			break;
+
+		case SDL_MOUSEMOTION:
+			setParameter (BODY_X, ((float) event.motion.x) / rDistance);
+			setParameter (BODY_Y, ((float) event.motion.y) / rDistance);
+			break;
+
+		case SDL_MOUSEWHEEL:
+			for (int p = 0; p < PARAMETER_NUMBER; p++) {
+				if (keyboard[parameters[p].scancode]) {
+					float value = getParameter (p);
+
+					if (event.wheel.y < 0) {
+						value -= parameters[p].ssub * event.wheel.y;
+						if (value < parameters[p].min) { value = parameters[p].min; }
+					}
+					else {
+						value += parameters[p].aadd * event.wheel.y;
+						if (value > parameters[p].max) { value = parameters[p].max; }
+					}
+					setParameter (p, value);
+				}
+			}
+			break;
+
+			// Keyboard events
+		case SDL_KEYDOWN:
+			// SDL_Log ("Physical %s key acting as %s key",
+			// 		 SDL_GetScancodeName (event.key.keysym.scancode),
+			// 		 SDL_GetKeyName (event.key.keysym.sym)
+			// 	);
+
+			switch (event.key.keysym.scancode)
+			{
+			case SDL_SCANCODE_ESCAPE:
+				stop = true;
+				break;
+
+			case SDL_SCANCODE_KP_ENTER:
+				displayParameters = !displayParameters;
+				break;				
+
+			case SDL_SCANCODE_RETURN : 
+				initParticles (UNIFORM_INIT);
 				break;
 				
-			case SDL_MOUSEBUTTONUP:
-				switch (event.button.button)
-				{
-					switch (mouseMode)
-					{
-					case KEEP_PRESSED : connectedBodies = false; break;
-					case SWITCH_ON_CLICK : break;
+			case SDL_SCANCODE_BACKSPACE : 
+				initParticles (RANDOM_INIT);
+				break;
+				
+			case SDL_SCANCODE_B :
+				if (borderMode == MIRROR_BORDERS) { borderMode = NO_BORDERS; } else { borderMode = MIRROR_BORDERS; }
+				break;
+
+				// Control intensity
+			case SDL_SCANCODE_DELETE :
+				if (pixelIntensity > 0) { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 4)); }
+				else { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 4)); }
+				break;
+
+			case SDL_SCANCODE_RIGHTBRACKET : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 1)); break;
+			case SDL_SCANCODE_BACKSLASH : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 0.1)); break;
+
+				// Control parameter sequences
+			case SDL_SCANCODE_0 : case SDL_SCANCODE_1 : case SDL_SCANCODE_2 : case SDL_SCANCODE_3 : case SDL_SCANCODE_4 : case SDL_SCANCODE_5 : case SDL_SCANCODE_6 : case SDL_SCANCODE_7 : case SDL_SCANCODE_8 : case SDL_SCANCODE_9 :
+			{
+				std::string filename;
+				switch (event.key.keysym.scancode) {
+				case SDL_SCANCODE_0 : filename = "static-cells-parameter-sequence-0.csv"; break;
+				case SDL_SCANCODE_1 : filename = "static-cells-parameter-sequence-1.csv"; break;
+				case SDL_SCANCODE_2 : filename = "static-cells-parameter-sequence-2.csv"; break;
+				case SDL_SCANCODE_3 : filename = "static-cells-parameter-sequence-3.csv"; break;
+				case SDL_SCANCODE_4 : filename = "static-cells-parameter-sequence-4.csv"; break;
+				case SDL_SCANCODE_5 : filename = "static-cells-parameter-sequence-5.csv"; break;
+				case SDL_SCANCODE_6 : filename = "static-cells-parameter-sequence-6.csv"; break;
+				case SDL_SCANCODE_7 : filename = "static-cells-parameter-sequence-7.csv"; break;
+				case SDL_SCANCODE_8 : filename = "static-cells-parameter-sequence-8.csv"; break;
+				case SDL_SCANCODE_9 : filename = "static-cells-parameter-sequence-9.csv"; break;						
+				}
+
+				if (recordParameters) {
+					openOutputParameterFile (filename);
+					writeOutputParameterFile ();
+				}
+				else if (readParameters) { openInputParameterFile (filename); }
+				break;
+			}
+
+			case SDL_SCANCODE_PAGEUP :   saveParticles ("particle-positions.csv"); break;
+			case SDL_SCANCODE_PAGEDOWN : loadParticles ("particle-positions.csv"); break;
+
+				// Control body weight
+			case SDL_SCANCODE_SPACE :
+				if (bodyWeight != 1.) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.)); }
+				else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.)); }
+				break;
+
+			case SDL_SCANCODE_LEFT :
+				events.interrupt (new LinearVariation (BODY_WEIGHT, 1., 1));
+				break;
+
+			case SDL_SCANCODE_UP :
+				events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.));
+				break;
+
+			case SDL_SCANCODE_DOWN :
+				events.interrupt (new LinearVariation (BODY_WEIGHT, 0., 1));
+				break;
+
+			case SDL_SCANCODE_RIGHT :
+				events.interrupt (new LinearVariation (BODY_WEIGHT, -0.75, 0.01));
+				break;
+
+				// Control all parameters
+			case SDL_SCANCODE_KP_0 :
+				for (int p = 0; p < PARAMETER_NUMBER; p++) {
+					if (keyboard[parameters[p].scancode]) {
+						setParameter (p, parameters[p].moy);
 					}
-					break;
-					
-				case SDL_BUTTON_RIGHT:
-					break;
 				}
 				break;
 
-			case SDL_MOUSEMOTION:
-				setParameter (BODY_X, ((double) event.motion.x) / graphicsWidth);
-				setParameter (BODY_Y, ((double) event.motion.y) / graphicsHeight);
-				break;
-
-			case SDL_MOUSEWHEEL:
+			case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 : case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS :
 				for (int p = 0; p < PARAMETER_NUMBER; p++) {
 					if (keyboard[parameters[p].scancode]) {
 						float value = getParameter (p);
-
-						if (event.wheel.y < 0) {
-							value -= parameters[p].ssub * event.wheel.y;
-							if (value < parameters[p].min) { value = parameters[p].min; }
+							
+						switch (event.key.keysym.scancode)
+						{
+						case SDL_SCANCODE_KP_PLUS :     value += parameters[p].aadd; break;
+						case SDL_SCANCODE_KP_9 :        value += parameters[p].add; break;
+						case SDL_SCANCODE_KP_MULTIPLY : value += parameters[p].sub; break;
+						case SDL_SCANCODE_KP_MINUS :    value += parameters[p].ssub; break;
 						}
-						else {
-							value += parameters[p].aadd * event.wheel.y;
-							if (value > parameters[p].max) { value = parameters[p].max; }
+							
+						switch (event.key.keysym.scancode)
+						{
+						case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 :         if (value > parameters[p].max) { value = parameters[p].max; } break;
+						case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS : if (value < parameters[p].min) { value = parameters[p].min; } break;
 						}
+							
 						setParameter (p, value);
 					}
 				}
 				break;
-
-				// Keyboard events
-			case SDL_KEYDOWN:
-				// SDL_Log ("Physical %s key acting as %s key",
-				// 		 SDL_GetScancodeName (event.key.keysym.scancode),
-				// 		 SDL_GetKeyName (event.key.keysym.sym)
-				// 	);
-
-				switch (event.key.keysym.scancode)
-				{
-				case SDL_SCANCODE_ESCAPE:
-					stop = true;
-					break;
-
-				case SDL_SCANCODE_KP_ENTER:
-					displayParameters = !displayParameters;
-					break;				
-
-				case SDL_SCANCODE_RETURN : 
-					initParticles (UNIFORM_INIT);
-					break;
+			}
+			break;
 				
-				case SDL_SCANCODE_BACKSPACE : 
-					initParticles (RANDOM_INIT);
-					break;
-				
-				case SDL_SCANCODE_B :
-					if (borderMode == MIRROR_BORDERS) { borderMode = NO_BORDERS; } else { borderMode = MIRROR_BORDERS; }
-					break;
-
-					// Control intensity
-				case SDL_SCANCODE_DELETE :
-					if (pixelIntensity > 0) { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 4)); }
-					else { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 4)); }
-					break;
-
-				case SDL_SCANCODE_RIGHTBRACKET : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 1)); break;
-				case SDL_SCANCODE_BACKSLASH : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 0.1)); break;
-
-					// Control parameter sequences
-				case SDL_SCANCODE_0 : case SDL_SCANCODE_1 : case SDL_SCANCODE_2 : case SDL_SCANCODE_3 : case SDL_SCANCODE_4 : case SDL_SCANCODE_5 : case SDL_SCANCODE_6 : case SDL_SCANCODE_7 : case SDL_SCANCODE_8 : case SDL_SCANCODE_9 :
-				{
-					std::string filename;
-					switch (event.key.keysym.scancode) {
-					case SDL_SCANCODE_0 : filename = "static-cells-parameter-sequence-0.csv"; break;
-					case SDL_SCANCODE_1 : filename = "static-cells-parameter-sequence-1.csv"; break;
-					case SDL_SCANCODE_2 : filename = "static-cells-parameter-sequence-2.csv"; break;
-					case SDL_SCANCODE_3 : filename = "static-cells-parameter-sequence-3.csv"; break;
-					case SDL_SCANCODE_4 : filename = "static-cells-parameter-sequence-4.csv"; break;
-					case SDL_SCANCODE_5 : filename = "static-cells-parameter-sequence-5.csv"; break;
-					case SDL_SCANCODE_6 : filename = "static-cells-parameter-sequence-6.csv"; break;
-					case SDL_SCANCODE_7 : filename = "static-cells-parameter-sequence-7.csv"; break;
-					case SDL_SCANCODE_8 : filename = "static-cells-parameter-sequence-8.csv"; break;
-					case SDL_SCANCODE_9 : filename = "static-cells-parameter-sequence-9.csv"; break;						
-					}
-
-					if (recordParameters) {
-						openOutputParameterFile (filename);
-						writeOutputParameterFile ();
-					}
-					else if (readParameters) { openInputParameterFile (filename); }
-					break;
-				}
-
-				case SDL_SCANCODE_PAGEUP :   saveParticles ("particle-positions.csv"); break;
-				case SDL_SCANCODE_PAGEDOWN : loadParticles ("particle-positions.csv"); break;
-
-					// Control body weight
-				case SDL_SCANCODE_SPACE :
-					if (bodyWeight != 1.) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.)); }
-					else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.)); }
-					break;
-
-				case SDL_SCANCODE_LEFT :
-					events.interrupt (new LinearVariation (BODY_WEIGHT, 1., 1));
-					break;
-
-				case SDL_SCANCODE_UP :
-					events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.));
-					break;
-
-				case SDL_SCANCODE_DOWN :
-					events.interrupt (new LinearVariation (BODY_WEIGHT, 0., 1));
-					break;
-
-				case SDL_SCANCODE_RIGHT :
-					events.interrupt (new LinearVariation (BODY_WEIGHT, -0.75, 0.01));
-					break;
-
-					// Control all parameters
-				case SDL_SCANCODE_KP_0 :
-					for (int p = 0; p < PARAMETER_NUMBER; p++) {
-						if (keyboard[parameters[p].scancode]) {
-							setParameter (p, parameters[p].moy);
-						}
-					}
-					break;
-
-				case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 : case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS :
-					for (int p = 0; p < PARAMETER_NUMBER; p++) {
-						if (keyboard[parameters[p].scancode]) {
-							float value = getParameter (p);
-							
-							switch (event.key.keysym.scancode)
-							{
-							case SDL_SCANCODE_KP_PLUS :     value += parameters[p].aadd; break;
-							case SDL_SCANCODE_KP_9 :        value += parameters[p].add; break;
-							case SDL_SCANCODE_KP_MULTIPLY : value += parameters[p].sub; break;
-							case SDL_SCANCODE_KP_MINUS :    value += parameters[p].ssub; break;
-							}
-							
-							switch (event.key.keysym.sym)
-							{
-							case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 :         if (value > parameters[p].max) { value = parameters[p].max; } break;
-							case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS : if (value < parameters[p].min) { value = parameters[p].min; } break;
-							}
-							
-							setParameter (p, value);
-						}
-					}
-					break;
-				}
-				break;
-				
-				// Other events
-			case SDL_QUIT:
-				stop = true;
-				break;
-            }
-        }
-	} else {
-		cv::imshow ("static-cells", finalFrame);
-		
-		int key = cv::waitKey (1);
-		if (key > 0)
-		{
-			key = key & 0xFF;
-			std::cout << "KEY PRESSED: " << key << std::endl;
-			stop = stop || key == 27; // ESC
-
-			if (key == 13) // Enter
-			{
-				time_t t = time (0);
-				struct tm *now = localtime (&t);
-				std::string filename = "static-cells-screenshot-" + std::to_string (now->tm_year + 1900) + "-" + std::to_string (now->tm_mon + 1) + "-" + std::to_string (now->tm_mday) + "-" + std::to_string (now->tm_hour) + "-" + std::to_string (now->tm_min) + "-" + std::to_string (now->tm_sec) + ".png";
-
-				std::vector<int> params;
-				params.push_back (CV_IMWRITE_PNG_COMPRESSION);
-				params.push_back (0);
-				cv::imwrite (filename, finalFrame, params);
-				std::cout << "SCREENSHOT: " << filename << std::endl;
-			}
-
-			else if (key == 48) saveConfig (0);
-			else if (key == 49) saveConfig (1);
-			else if (key == 50) saveConfig (2);
-			else if (key == 51) saveConfig (3);
-			else if (key == 52) saveConfig (4);
-			else if (key == 53) saveConfig (5);
-			else if (key == 54) saveConfig (6);
-			else if (key == 55) saveConfig (7);
-			else if (key == 56) saveConfig (8);
-			else if (key == 57) saveConfig (9);
-
-			else if (key == 224) loadConfig (0);
-			else if (key ==  38) loadConfig (1);
-			else if (key == 233) loadConfig (2);
-			else if (key ==  34) loadConfig (3);
-			else if (key ==  39) loadConfig (4);
-			else if (key ==  40) loadConfig (5);
-			else if (key ==  45) loadConfig (6);
-			else if (key == 232) loadConfig (7);
-			else if (key ==  95) loadConfig (8);
-			else if (key == 231) loadConfig (9);
-
-			else if (key == 190) gravitationAngle = -30; // F1
-			else if (key == 191) gravitationAngle = -25; // F2
-			else if (key == 192) gravitationAngle = -20; // F3
-			else if (key == 193) gravitationAngle = -15; // F4
-			else if (key == 194) gravitationAngle = -10; // F5
-			else if (key == 195) gravitationAngle = - 5; // F6
-			else if (key == 196) gravitationAngle =   0; // F7
-			else if (key == 197) gravitationAngle =   5; // F8
-			else if (key == 198) gravitationAngle =  10; // F9
-			else if (key == 199) gravitationAngle =  15; // F10
-			else if (key == 200) gravitationAngle =  20; // F11
-			else if (key == 201) gravitationAngle =  25; // F12
-
-			else if (key == 176) // 0 vernum
-			{
-				if (particleDamping >= 1) {
-					events.interrupt (new LinearVariation (PARTICLE_DAMPING, 0.02, 3));
-				} else {
-					events.interrupt (new LinearVariation (PARTICLE_DAMPING, 1, 3));
-				}
-			}
-		
-			else if (key == 85) // Page up
-			{ connectedBodies = true; }
-			else if (key == 86) // Page down
-			{ connectedBodies = false; }
-		
-			else if (key == 117) { // u
-				initParticles (UNIFORM_INIT);
-			}
-			
-			else if (key == 106) { // j
-				initParticles (RANDOM_INIT);
-			}
-
-			else if (key == 141) { // Enter (vernum)
-				displayParameters = !displayParameters;
-			}
-			
-			
-			else if (key == 97) { // a
-				bodyRadius -= 100;
-				if (bodyRadius < 0) { bodyRadius = 0; }
-			}
-
-			else if (key == 101) { // e
-				bodyRadius += 100;
-			}
-
-			
-			
-			else if (key == 113) { // q
-				bodyAttractFactor -= 0.1;
-				if (bodyAttractFactor < 0) { bodyAttractFactor = 0; }
-			}
-
-			else if (key == 100) { // d
-				bodyAttractFactor += 0.1;
-			}
-
-			
-			
-			else if (key == 119) { // w
-				bodyRepelFactor -= 0.1;
-				if (bodyRepelFactor < 0) { bodyRepelFactor = 0; }
-			}
-
-			else if (key == 99) { // c
-				bodyRepelFactor += 0.1;
-			}
-
-
-			
-			else if (key == 114) { // r
-				particleNumber -= (int) ((float) graphicsWidth * graphicsHeight / 16);
-				if (particleNumber < 0) { particleNumber = 0; } 
-				setupThreads();
-				setupColor();
-			}
-
-			else if (key == 121) { // y
-				particleNumber += (int) ((float) graphicsWidth * graphicsHeight / 16);
-				if (particleNumber > maxParticleNumber) { particleNumber = maxParticleNumber; } 
-				setupThreads();
-				setupColor();
-			}
-
-
-			
-			else if (key == 102) { // f
-				particleRatioMoy -= 0.01;
-				if (particleRatioMoy < 0) { particleRatioMoy = 0; } 
-				setupColor();
-			}
-
-			else if (key == 104) { // h
-				particleRatioMoy += 0.01;
-				if (particleRatioMoy > 1) { particleRatioMoy = 1; } 
-				setupColor();
-			}
-
-			
-
-			else if (key == 118) { // v
-				threadNumber -= 1;
-				if (threadNumber < 1) { threadNumber = 1; } 
-				setupThreads();
-			}
-
-			else if (key == 110) { // n
-				threadNumber += 1;
-				if (threadNumber > maxThreadNumber) { threadNumber = maxThreadNumber; }
-				setupThreads();
-			}
-
-
-			
-			else if (key == 183) { // 7 (vernum)
-				particleSpeed -= 0.001;
-				if (particleSpeed < 0) { particleSpeed = 0; }
-				setupPhysics ();
-			}
-
-			else if (key == 185) { // 9 (vernum)
-				particleSpeed += 0.001;
-				setupPhysics ();
-			}
-			
-
-			
-			else if (key == 180) { // 4 (vernum)
-				particleDamping -= 0.001;
-				if (particleDamping < 0) { particleDamping = 0; }
-			}
-
-			else if (key == 182) { // 6 (vernum)
-				particleDamping += 0.001;
-			}
-
-			
-			
-			else if (key == 177) { // 1 (vernum)
-				gravitationFactor -= 0.1;
-				setupPhysics ();
-			}
-
-			else if (key == 179) { // 3 (vernum)
-				gravitationFactor += 0.1;
-				setupPhysics ();
-			}
-
-			
-			else if (key == 107) { // k
-				particleColorMoy.r++;
-				if (particleColorMoy.r > 255) { particleColorMoy.r = 255; }
-				setupColor();
-			}
-
-			else if (key == 108) { // l
-				particleColorMoy.g++;
-				if (particleColorMoy.g > 255) { particleColorMoy.g = 255; }
-				setupColor();
-			}
-
-			else if (key == 109) { // m
-				particleColorMoy.b++;
-				if (particleColorMoy.b > 255) { particleColorMoy.b = 255; }
-				setupColor();
-			}
-
-			
-			else if (key == 59) { // ;
-				particleColorMoy.r--;
-				if (particleColorMoy.r < 0) { particleColorMoy.r = 0; }
-				setupColor();
-			}
-
-			else if (key == 58) { // :
-				particleColorMoy.g--;
-				if (particleColorMoy.g < 0) { particleColorMoy.g = 0; }
-				setupColor();
-			}
-
-			else if (key == 33) { // !
-				particleColorMoy.b--;
-				if (particleColorMoy.b < 0) { particleColorMoy.b = 0; }
-				setupColor();
-			}
+			// Other events
+		case SDL_QUIT:
+			stop = true;
+			break;
 		}
 	}
 }
+// } else {
+// 		cv::imshow ("static-cells", finalFrame);
+		
+// 		int key = cv::waitKey (1);
+// 		if (key > 0)
+// 		{
+// 			key = key & 0xFF;
+// 			std::cout << "KEY PRESSED: " << key << std::endl;
+// 			stop = stop || key == 27; // ESC
+
+// 			if (key == 13) // Enter
+// 			{
+// 				time_t t = time (0);
+// 				struct tm *now = localtime (&t);
+// 				std::string filename = "static-cells-screenshot-" + std::to_string (now->tm_year + 1900) + "-" + std::to_string (now->tm_mon + 1) + "-" + std::to_string (now->tm_mday) + "-" + std::to_string (now->tm_hour) + "-" + std::to_string (now->tm_min) + "-" + std::to_string (now->tm_sec) + ".png";
+
+// 				std::vector<int> params;
+// 				params.push_back (CV_IMWRITE_PNG_COMPRESSION);
+// 				params.push_back (0);
+// 				cv::imwrite (filename, finalFrame, params);
+// 				std::cout << "SCREENSHOT: " << filename << std::endl;
+// 			}
+
+// 			else if (key == 48) saveConfig (0);
+// 			else if (key == 49) saveConfig (1);
+// 			else if (key == 50) saveConfig (2);
+// 			else if (key == 51) saveConfig (3);
+// 			else if (key == 52) saveConfig (4);
+// 			else if (key == 53) saveConfig (5);
+// 			else if (key == 54) saveConfig (6);
+// 			else if (key == 55) saveConfig (7);
+// 			else if (key == 56) saveConfig (8);
+// 			else if (key == 57) saveConfig (9);
+
+// 			else if (key == 224) loadConfig (0);
+// 			else if (key ==  38) loadConfig (1);
+// 			else if (key == 233) loadConfig (2);
+// 			else if (key ==  34) loadConfig (3);
+// 			else if (key ==  39) loadConfig (4);
+// 			else if (key ==  40) loadConfig (5);
+// 			else if (key ==  45) loadConfig (6);
+// 			else if (key == 232) loadConfig (7);
+// 			else if (key ==  95) loadConfig (8);
+// 			else if (key == 231) loadConfig (9);
+
+// 			else if (key == 190) gravitationAngle = -30; // F1
+// 			else if (key == 191) gravitationAngle = -25; // F2
+// 			else if (key == 192) gravitationAngle = -20; // F3
+// 			else if (key == 193) gravitationAngle = -15; // F4
+// 			else if (key == 194) gravitationAngle = -10; // F5
+// 			else if (key == 195) gravitationAngle = - 5; // F6
+// 			else if (key == 196) gravitationAngle =   0; // F7
+// 			else if (key == 197) gravitationAngle =   5; // F8
+// 			else if (key == 198) gravitationAngle =  10; // F9
+// 			else if (key == 199) gravitationAngle =  15; // F10
+// 			else if (key == 200) gravitationAngle =  20; // F11
+// 			else if (key == 201) gravitationAngle =  25; // F12
+
+// 			else if (key == 176) // 0 vernum
+// 			{
+// 				if (particleDamping >= 1) {
+// 					events.interrupt (new LinearVariation (PARTICLE_DAMPING, 0.02, 3));
+// 				} else {
+// 					events.interrupt (new LinearVariation (PARTICLE_DAMPING, 1, 3));
+// 				}
+// 			}
+		
+// 			else if (key == 85) // Page up
+// 			{ connectedBodies = true; }
+// 			else if (key == 86) // Page down
+// 			{ connectedBodies = false; }
+		
+// 			else if (key == 117) { // u
+// 				initParticles (UNIFORM_INIT);
+// 			}
+			
+// 			else if (key == 106) { // j
+// 				initParticles (RANDOM_INIT);
+// 			}
+
+// 			else if (key == 141) { // Enter (vernum)
+// 				displayParameters = !displayParameters;
+// 			}
+			
+			
+// 			else if (key == 97) { // a
+// 				bodyRadius -= 100;
+// 				if (bodyRadius < 0) { bodyRadius = 0; }
+// 			}
+
+// 			else if (key == 101) { // e
+// 				bodyRadius += 100;
+// 			}
+
+			
+			
+// 			else if (key == 113) { // q
+// 				bodyAttractFactor -= 0.1;
+// 				if (bodyAttractFactor < 0) { bodyAttractFactor = 0; }
+// 			}
+
+// 			else if (key == 100) { // d
+// 				bodyAttractFactor += 0.1;
+// 			}
+
+			
+			
+// 			else if (key == 119) { // w
+// 				bodyRepelFactor -= 0.1;
+// 				if (bodyRepelFactor < 0) { bodyRepelFactor = 0; }
+// 			}
+
+// 			else if (key == 99) { // c
+// 				bodyRepelFactor += 0.1;
+// 			}
+
+
+			
+// 			else if (key == 114) { // r
+// 				particleNumber -= (int) ((float) graphicsWidth * graphicsHeight / 16);
+// 				if (particleNumber < 0) { particleNumber = 0; } 
+// 				setupThreads();
+// 				setupColor();
+// 			}
+
+// 			else if (key == 121) { // y
+// 				particleNumber += (int) ((float) graphicsWidth * graphicsHeight / 16);
+// 				if (particleNumber > maxParticleNumber) { particleNumber = maxParticleNumber; } 
+// 				setupThreads();
+// 				setupColor();
+// 			}
+
+
+			
+// 			else if (key == 102) { // f
+// 				particleRatioMoy -= 0.01;
+// 				if (particleRatioMoy < 0) { particleRatioMoy = 0; } 
+// 				setupColor();
+// 			}
+
+// 			else if (key == 104) { // h
+// 				particleRatioMoy += 0.01;
+// 				if (particleRatioMoy > 1) { particleRatioMoy = 1; } 
+// 				setupColor();
+// 			}
+
+			
+
+// 			else if (key == 118) { // v
+// 				threadNumber -= 1;
+// 				if (threadNumber < 1) { threadNumber = 1; } 
+// 				setupThreads();
+// 			}
+
+// 			else if (key == 110) { // n
+// 				threadNumber += 1;
+// 				if (threadNumber > maxThreadNumber) { threadNumber = maxThreadNumber; }
+// 				setupThreads();
+// 			}
+
+
+			
+// 			else if (key == 183) { // 7 (vernum)
+// 				particleSpeed -= 0.001;
+// 				if (particleSpeed < 0) { particleSpeed = 0; }
+// 			}
+
+// 			else if (key == 185) { // 9 (vernum)
+// 				particleSpeed += 0.001;
+// 			}
+			
+
+			
+// 			else if (key == 180) { // 4 (vernum)
+// 				particleDamping -= 0.001;
+// 				if (particleDamping < 0) { particleDamping = 0; }
+// 			}
+
+// 			else if (key == 182) { // 6 (vernum)
+// 				particleDamping += 0.001;
+// 			}
+
+			
+			
+// 			else if (key == 177) { // 1 (vernum)
+// 				gravitationFactor -= 0.1;
+// 			}
+
+// 			else if (key == 179) { // 3 (vernum)
+// 				gravitationFactor += 0.1;
+// 			}
+
+			
+// 			else if (key == 107) { // k
+// 				particleColorMoy.r++;
+// 				if (particleColorMoy.r > 255) { particleColorMoy.r = 255; }
+// 				setupColor();
+// 			}
+
+// 			else if (key == 108) { // l
+// 				particleColorMoy.g++;
+// 				if (particleColorMoy.g > 255) { particleColorMoy.g = 255; }
+// 				setupColor();
+// 			}
+
+// 			else if (key == 109) { // m
+// 				particleColorMoy.b++;
+// 				if (particleColorMoy.b > 255) { particleColorMoy.b = 255; }
+// 				setupColor();
+// 			}
+
+			
+// 			else if (key == 59) { // ;
+// 				particleColorMoy.r--;
+// 				if (particleColorMoy.r < 0) { particleColorMoy.r = 0; }
+// 				setupColor();
+// 			}
+
+// 			else if (key == 58) { // :
+// 				particleColorMoy.g--;
+// 				if (particleColorMoy.g < 0) { particleColorMoy.g = 0; }
+// 				setupColor();
+// 			}
+
+// 			else if (key == 33) { // !
+// 				particleColorMoy.b--;
+// 				if (particleColorMoy.b < 0) { particleColorMoy.b = 0; }
+// 				setupColor();
+// 			}
+// }
+// }
 
 
 void record ()
@@ -1333,7 +1361,7 @@ void saveParticles (std::string filename)
 		std::cout << "SAVING PARTICLE POSITIONS: " << filename << std::endl;
 
 		for (int i = 0; i < particleNumber; i++)
-		{ outputParticleFile << (particles[i].x / graphicsWidth) << " " << (particles[i].y / graphicsHeight) << " " << (particles[i].dx / graphicsWidth) << " " << (particles[i].dy / graphicsHeight) << "\n"; }	
+		{ outputParticleFile << particles[i].x << " " << particles[i].y << " " << particles[i].dx << " " << particles[i].dy << "\n"; }	
 
 		outputParticleFile.close ();
 	}
@@ -1359,15 +1387,15 @@ void loadParticles (std::string filename)
 
 		int i = 0;
 		std::string line;
-		double x, y, dx, dy;
+		float x, y, dx, dy;
 	
 		while (std::getline (inputParticleFile, line) && i < particleNumber) {
 			std::istringstream ss (line);
 			ss >> x >> y >> dx >> dy;
-			particles[i].x = x * graphicsWidth;
-			particles[i].y = y * graphicsHeight;
-			particles[i].dx = dx * graphicsWidth;
-			particles[i].dy = dy * graphicsHeight;
+			particles[i].x = x;
+			particles[i].y = y;
+			particles[i].dx = dx;
+			particles[i].dy = dy;
 			i++;
 		}
 
@@ -1376,26 +1404,26 @@ void loadParticles (std::string filename)
 }
 
 
-void *updateParticles (void *arg)
-{
-	int id = (intptr_t) arg;
-	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].update(); }
-	pthread_exit(NULL);
-}
+// void *updateParticles (void *arg)
+// {
+// 	int id = (intptr_t) arg;
+// 	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].update(); }
+// 	pthread_exit(NULL);
+// }
 
-void *updateParticlesWithDistribution (void *arg)
-{
-	int id = (intptr_t) arg;
-	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].updateWithDistribution(); }
-	pthread_exit(NULL);
-}
+// void *updateParticlesWithDistribution (void *arg)
+// {
+// 	int id = (intptr_t) arg;
+// 	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].updateWithDistribution(); }
+// 	pthread_exit(NULL);
+// }
 
-void *moveParticles (void *arg)
-{
-	int id = (intptr_t) arg;
-	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].move(); }
-	pthread_exit(NULL);
-}
+// void *moveParticles (void *arg)
+// {
+// 	int id = (intptr_t) arg;
+// 	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].move(); }
+// 	pthread_exit(NULL);
+// }
 
 void *updateAndMoveParticles (void *arg)
 {
@@ -1404,12 +1432,12 @@ void *updateAndMoveParticles (void *arg)
 	pthread_exit(NULL);
 }
 
-void *applyParticles (void *arg)
-{
-	int id = (intptr_t) arg;
-	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].apply(); }
-	pthread_exit(NULL);
-}
+// void *applyParticles (void *arg)
+// {
+// 	int id = (intptr_t) arg;
+// 	for (int i = firstParticle[id]; i < lastParticle[id]; i++) { particles[i].apply(); }
+// 	pthread_exit(NULL);
+// }
 
 void *clearPixels (void *arg)
 {
@@ -1435,127 +1463,197 @@ void *applyPixels (void *arg)
 
 Particle::Particle ()
 {
-	alive = true;
+	//alive = true;
 	x = y = dx = dy = 0;
-	r = a = dr = da = 0;
-	body = cv::Point (0,0);
+	//r = a = dr = da = 0;
+	//body = cv::Point (0,0);
 }
 
 
 void Particle::updateAndMove ()
 {
-	// From absolute to relative coordinates
-	x = x - bodyX * graphicsWidth;
-	y = y - bodyY * graphicsHeight;
-
-	// From Cartesian to polar coordinates
-	r = sqrt (pow(x,2) + pow(y,2));
-	if (r == 0) { return; }
-
-	a = atan2 (y, x);
-
-	dr = (x * dx + y * dy) / r;
-	da = (x * dy - y * dx) / pow(x,2) * pow(cos(a),2);
-
 	// Compute motion
-	float ddr = r * pow(da,2) - particleDamping * dr / particleWeight - bodyWeight / pow(r,gravitationFactor);
-	float dda = - 2 * dr * da / r - particleDamping * da / particleWeight;
+	float distanceX = x - bodyX;
+	float distanceY = y - bodyY;
+	
+	float factor = pow (pow (distanceX, 2) + pow (distanceY, 2), rGravitationFactor);
+	if (factor == 0) return;
+
+	float angle = atan2 (distanceY, distanceX);
+	float ddx = - bodyWeight * cos (angle + rGravitationAngle) / factor - rParticleDamping * dx;
+	float ddy = - bodyWeight * sin (angle + rGravitationAngle) / factor - rParticleDamping * dy;
 
 	// Apply motion
-	r += ddr / 2 * pow (delay * timeFactor, 2);
-	a += dda / 2 * pow (delay * timeFactor, 2);
+	dx += ddx * rDelay;
+	dy += ddy * rDelay;
 
-	dr += ddr * delay * timeFactor;
-	da += dda * delay * timeFactor;
+	x += (dx - ddx * rDelay / 2) * rDelay;
+	y += (dy - ddy * rDelay / 2) * rDelay;
 
-	// From polar to Cartesian coordinates
-	x = r * cos(a);
-	y = r * sin(a);
+	if (borderMode == MIRROR_BORDERS) {
+		while (x < 0 || x >= rWidthBorder) {
+			if (x < 0) { x = - x + rPixelSize; } else { x = rWidthBorderDoubled - x - rPixelSize; }
+			dx = -dx;
+		}
 
-	dx = - r * da * sin(a) + dr * cos(a);
-	dy = r * da * cos(a) + dr * sin(a);
+		while (y < 0 || y >= rHeightBorder) {
+			if (y < 0) { y = - y + rPixelSize; } else { y = rHeightBorderDoubled - y - rPixelSize; }
+			dy = -dy;
+		}
 
-	// From relative to absolute coordinates
-	x = x + bodyX * graphicsWidth;
-	y = y + bodyY * graphicsHeight;
-}
+		int rX = x * rDistance;
+		int rY = y * rDistance;
+		pixels [rX + rY * graphicsWidth]++;
+	}
 
-
-void Particle::update ()
-{
-	//if (! alive) return;
-	
-	float distance = sqrt (pow (realBodyX - x, 2) + pow (realBodyY - y, 2));
-	if (distance != 0) { //if (! (distance == 0 || (bodyRadius > 0 && distance > realBodyRadius))) {
-		//if (bodyRadius > 0) { distance /= realBodyRadius; }
-		float factor = realBodyWeight / pow (distance, realGravitationFactor);
-		//if (bodyRadius > 0) { factor /= realBodyRadius; }
-
-		float addX = factor * (realBodyX-x);
-		float addY = factor * (realBodyY-y);
-
-		// float angle = atan ((realBodyY-y)/(realBodyX-x));
-		// if (realBodyX < x) { angle += PI; }
-		// float addX = factor * cos (angle + gravitationAngle * PI / 180);
-		// float addY = factor * sin (angle + gravitationAngle * PI / 180);
-
-		dx += addX;
-		dy += addY;
-
-		if (abs(dx) > maxParticleSpeed || abs(dy) > maxParticleSpeed) { dx = 0; dy = 0; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl; }
+	else {
+		int rX = x * rDistance;
+		int rY = y * rDistance;
+		if (rX >= 0 && rX < graphicsWidth && rY >= 0 && rY < graphicsHeight) { pixels [rX + rY * graphicsWidth]++; }
 	}
 }
 
 
-void Particle::updateWithDistribution ()
-{
-	if (! alive) return;
+// void Particle::updateAndMove ()
+// {
+// 	// Compute motion
+// 	float rX = x - bodyX;
+// 	float rY = y - bodyY;
 	
-	float distance = sqrt (pow (body.x - x, 2) + pow (body.y - y, 2));
-	float factor = bodyAttractFactor * 2 / pow (distance, gravitationFactor);
-	if (realtimeMotion) { factor *= delay / realtimeDelay; }
-	float addX = (body.x-x) * factor;
-	float addY = (body.y-y) * factor;
+// 	float factor = pow (pow (rX, 2) + pow (rY, 2), rGravitationFactorPlusOne);
+// 	if (factor == 0) return;
+
+// 	float angle = atan2 (rY, rX);
+// 	float ddx = - bodyWeight * rX / factor - rParticleDamping * dx;
+// 	float ddy = - bodyWeight * rY / factor - rParticleDamping * dy;
+
+// 	// Apply motion
+// 	dx += ddx * rDelay;
+// 	dy += ddy * rDelay;
+
+// 	x += (dx - ddx * rDelay / 2) * rDelay;
+// 	y += (dy - ddy * rDelay / 2) * rDelay;
+// }
+
+
+
+
+// void Particle::updateAndMove ()
+// {
+// 	// From absolute to relative coordinates
+// 	x = x - bodyX * graphicsWidth;
+// 	y = y - bodyY * graphicsHeight;
+
+// 	// From Cartesian to polar coordinates
+// 	r = sqrt (pow(x,2) + pow(y,2));
+// 	if (r == 0) { return; }
+
+// 	a = atan2 (y, x);
+
+// 	dr = (x * dx + y * dy) / r;
+// 	da = (x * dy - y * dx) / pow(x,2) * pow(cos(a),2);
+
+// 	// Compute motion
+// 	float ddr = r * pow(da,2) - bodyWeight; // / pow(r,gravitationFactor) - particleDamping * dr / particleWeight;
+// 	float dda = - 2 * dr * da / r; // - particleDamping * da / particleWeight;
+
+// 	// Apply motion
+// 	r += (dr + ddr / 2 * delay * timeFactor) * delay * timeFactor;
+// 	a += (da + dda / 2 * delay * timeFactor) * delay * timeFactor;
+
+// 	dr += ddr * delay * timeFactor;
+// 	da += dda * delay * timeFactor;
+
+// 	// From polar to Cartesian coordinates
+// 	x = r * cos(a);
+// 	y = r * sin(a);
+
+// 	dx = - r * da * sin(a) + dr * cos(a);
+// 	dy = r * da * cos(a) + dr * sin(a);
+
+// 	// From relative to absolute coordinates
+// 	x = x + bodyX * graphicsWidth;
+// 	y = y + bodyY * graphicsHeight;
+// }
+
+
+// void Particle::update ()
+// {
+// 	//if (! alive) return;
 	
-	dx += addX; dy += addY;		
-}
+// 	float distance = sqrt (pow (rBodyX - x, 2) + pow (rBodyY - y, 2));
+// 	if (distance != 0) { //if (! (distance == 0 || (bodyRadius > 0 && distance > rBodyRadius))) {
+// 		//if (bodyRadius > 0) { distance /= rBodyRadius; }
+// 		float factor = rBodyWeight / pow (distance, rGravitationFactor);
+// 		//if (bodyRadius > 0) { factor /= rBodyRadius; }
+
+// 		float addX = factor * (rBodyX-x);
+// 		float addY = factor * (rBodyY-y);
+
+// 		// float angle = atan ((rBodyY-y)/(rBodyX-x));0
+// 		// if (rBodyX < x) { angle += PI; }
+// 		// float addX = factor * cos (angle + gravitationAngle * PI / 180);
+// 		// float addY = factor * sin (angle + gravitationAngle * PI / 180);
+
+// 		dx += addX;
+// 		dy += addY;
+
+// 		if (abs(dx) > maxParticleSpeed || abs(dy) > maxParticleSpeed) { dx = 0; dy = 0; alive = false; std::cout << "WARNING: MAX SPEED!" << std::endl; }
+// 	}
+// }
 
 
-void Particle::move ()
-{
-	//if (! alive) return;
-
-	dx *= realParticleDamping;
-	dy *= realParticleDamping;
-
-	x += dx * realParticleSpeed;
-	y += dy * realParticleSpeed;
-
-	// if (borderMode == MIRROR_BORDERS) {
-	// 	int mx = 0;
-	// 	while (x < 0 || x >= graphicsWidth) {
-	// 		if (x < 0) { x = -x; } else if (x >= graphicsWidth) { x = 2*graphicsWidth-x-1; }
-	// 		dx = -dx;
-	// 		mx++;
-	// 	}
-
-	// 	int my = 0;
-	// 	while (y < 0 || y >= graphicsHeight) {
-	// 		if (y < 0) { y = -y; } else if (y >= graphicsHeight) { y = 2*graphicsHeight-y-1; }
-	// 		dy = -dy;
-	// 		my++;
-	// 	}
-	// }
-}
+// void Particle::updateWithDistribution ()
+// {
+// 	if (! alive) return;
+	
+// 	float distance = sqrt (pow (body.x - x, 2) + pow (body.y - y, 2));
+// 	float factor = bodyAttractFactor * 2 / pow (distance, gravitationFactor);
+// 	if (realtimeMotion) { factor *= delay / realtimeDelay; }
+// 	float addX = (body.x-x) * factor;
+// 	float addY = (body.y-y) * factor;
+	
+// 	dx += addX; dy += addY;		
+// }
 
 
-void Particle::apply ()
-{
-	//if (! alive) return;
+// void Particle::move ()
+// {
+// 	//if (! alive) return;
 
-	if (x >= 0 && x < graphicsWidth && y >= 0 && y < graphicsHeight) // borderMode == MIRROR_BORDERS || 
-	{ pixels[((int)x) + ((int)y) * graphicsWidth]++; }
-}
+// 	dx *= rParticleDamping;
+// 	dy *= rParticleDamping;
+
+// 	x += dx * rParticleSpeed;
+// 	y += dy * rParticleSpeed;
+
+// 	// if (borderMode == MIRROR_BORDERS) {
+// 	// 	int mx = 0;
+// 	// 	while (x < 0 || x >= graphicsWidth) {
+// 	// 		if (x < 0) { x = -x; } else if (x >= graphicsWidth) { x = 2*graphicsWidth-x-1; }
+// 	// 		dx = -dx;
+// 	// 		mx++;
+// 	// 	}
+
+// 	// 	int my = 0;
+// 	// 	while (y < 0 || y >= graphicsHeight) {
+// 	// 		if (y < 0) { y = -y; } else if (y >= graphicsHeight) { y = 2*graphicsHeight-y-1; }
+// 	// 		dy = -dy;
+// 	// 		my++;
+// 	// 	}
+// 	// }
+// }
+
+
+// void Particle::apply ()
+// {
+// 	//if (! alive) return;
+// 	int rX = x * rDistance;
+// 	int rY = y * rDistance;
+
+// 	if (rX >= 0 && rX < graphicsWidth && rY >= 0 && rY < graphicsHeight) // borderMode == MIRROR_BORDERS || 
+// 	{ pixels [rX + rY * graphicsWidth]++; }
+// }
 
 
 int ms_sleep (unsigned int ms)
@@ -1588,121 +1686,50 @@ int ms_sleep (unsigned int ms)
 
 
 
-void saveConfig (int index) {
-	std::stringstream ss;
-	ss << "static-cells-config-" << index;
-	std::string filename = ss.str();
 
-	std::ofstream file;
-	file.open (filename, std::ios::out | std::ios::trunc);
+// Screen::Screen (char vi, int vx, int vy, int vdx, int vdy, int vdelay) {
+// 	i = vi; active = false; delay = vdelay;
+// 	sx = vx; sy = vy; sdx = vdx; sdy = vdy;
+// 	srect = cv::Rect (sx, sy, sdx, sdy);
+// 	srectp = cv::Rect (sx-1, sy-1, sdx+2, sdy+2);
+// 	time = distribution (generator);
+// }
 
-	file << "particleNumber " << particleNumber << "\n";
-	file << "particleSpeed " << particleSpeed << "\n";
-	file << "particleDamping " << particleDamping << "\n";
-	file << "gravitationFactor " << gravitationFactor << "\n";
-	file << "gravitationAngle " << gravitationAngle << "\n";
-	file << "bodyRadius " << bodyRadius << "\n";
-	file << "bodyAttractFactor " << bodyAttractFactor << "\n";
-	file << "bodyRepelFactor " << bodyRepelFactor << "\n";
+// void Screen::set ()
+// {
+// 	float cfmax = std::min (graphicsHeight * sfmax / sdx, graphicsWidth * sfmax / sdy);
+// 	float f = ((float) rand() / (RAND_MAX)) * (cfmax - cfmin) + cfmin;
 
-	if (withFixedBody) {
-		file << "withFixedBody 1\n";
-		file << "fixedBodyX " << fixedBodyX << "\n";
-		file << "fixedBodyY " << fixedBodyY << "\n";
-		file << "fixedBodyWeight " << fixedBodyWeight << "\n";
-	}
+// 	int vdx = f * sdx;
+// 	int vdy = f * sdy;
+// 	int vx = (rand() % (graphicsWidth-2 - vdx)) + 1;
+// 	int vy = (rand() % (graphicsHeight-2 - vdy)) + 1;
+
+// 	int vdelay = rand() % delayMax;
+
+// 	set (vx, vy, vdx, vdy, vdelay);
+// }
+
+// void Screen::set (int vx, int vy, int vdx, int vdy, int vdelay)
+// {
+// 	active = true; delay = vdelay;
+// 	cx = vx; cy = vy; cdx = vdx; cdy = vdy;
+// 	crect = cv::Rect (cx, cy, cdx, cdy);
+// 	crectp = cv::Rect (cx-1, cy-1, cdx+2, cdy+2);
+// 	time = distribution (generator);
+// 	std::cout << "SCREEN " << i << " ON: " << cx << " " << cy << " " << cdx << " " << cdy << std::endl;
+// }
+
+// void Screen::unset ()
+// {
+// 	active = false; time = distribution (generator);
+// 	std::cout << "SCREEN " << i << " OFF" << std::endl;
+// }
 	
-	file.close ();
-
-	std::cout << "CONFIG FILE " << index << " SAVED" << std::endl;
-}
-
-
-void loadConfig (int index) {
-	std::stringstream ss;
-	ss << "static-cells-config-" << index;
-	std::string filename = ss.str();
-
-	loadConfig (filename);
-}
-
-void loadConfig (std::string filename) {
-	std::ifstream file;
-	file.open (filename, std::ios::in);
-
-	std::string var;
-	std::string val;
-	
-	while (file >> var >> val) {
-		if (var == "particleNumber") particleNumber = atoi (val.c_str());
-		else if (var == "particleSpeed") particleSpeed = atof (val.c_str());
-		else if (var == "particleDamping") particleDamping = atof (val.c_str());
-		else if (var == "gravitationFactor") gravitationFactor = atof (val.c_str());
-		else if (var == "gravitationAngle") gravitationAngle = atof (val.c_str());
-		else if (var == "bodyRadius") bodyRadius = atof (val.c_str());
-		else if (var == "bodyAttractFactor") bodyAttractFactor = atof (val.c_str());
-		else if (var == "bodyRepelFactor") bodyRepelFactor = atof (val.c_str());
-		else if (var == "withFixedBody") withFixedBody = (atoi (val.c_str()) == 1);
-		else if (var == "fixedBodyX") fixedBodyX = atof (val.c_str());
-		else if (var == "fixedBodyY") fixedBodyY = atof (val.c_str());
-		else if (var == "fixedBodyWeight") fixedBodyWeight = atof (val.c_str());
-		else { std::cout << "Warning: field '" << var << "' in configuration file unknown!" << std::endl; }
-	}
-
-	file.close ();
-
-	setupColor();
-	setupPhysics();
-	setupThreads();
-
-	std::cout << "CONFIG FILE " << filename << " LOADED" << std::endl;
-}
-
-
-
-Screen::Screen (char vi, int vx, int vy, int vdx, int vdy, int vdelay) {
-	i = vi; active = false; delay = vdelay;
-	sx = vx; sy = vy; sdx = vdx; sdy = vdy;
-	srect = cv::Rect (sx, sy, sdx, sdy);
-	srectp = cv::Rect (sx-1, sy-1, sdx+2, sdy+2);
-	time = distribution (generator);
-}
-
-void Screen::set ()
-{
-	float cfmax = std::min (graphicsHeight * sfmax / sdx, graphicsWidth * sfmax / sdy);
-	float f = ((float) rand() / (RAND_MAX)) * (cfmax - cfmin) + cfmin;
-
-	int vdx = f * sdx;
-	int vdy = f * sdy;
-	int vx = (rand() % (graphicsWidth-2 - vdx)) + 1;
-	int vy = (rand() % (graphicsHeight-2 - vdy)) + 1;
-
-	int vdelay = rand() % delayMax;
-
-	set (vx, vy, vdx, vdy, vdelay);
-}
-
-void Screen::set (int vx, int vy, int vdx, int vdy, int vdelay)
-{
-	active = true; delay = vdelay;
-	cx = vx; cy = vy; cdx = vdx; cdy = vdy;
-	crect = cv::Rect (cx, cy, cdx, cdy);
-	crectp = cv::Rect (cx-1, cy-1, cdx+2, cdy+2);
-	time = distribution (generator);
-	std::cout << "SCREEN " << i << " ON: " << cx << " " << cy << " " << cdx << " " << cdy << std::endl;
-}
-
-void Screen::unset ()
-{
-	active = false; time = distribution (generator);
-	std::cout << "SCREEN " << i << " OFF" << std::endl;
-}
-	
-void Screen::swap () {
-	if (active) unset ();
-	else set ();
-}
+// void Screen::swap () {
+// 	if (active) unset ();
+// 	else set ();
+// }
 
 
 
@@ -1717,7 +1744,7 @@ void openOutputParameterFile (std::string filename) {
 
 void writeOutputParameterFile ()
 {
-		for (int p = 0; p < PARAMETER_NUMBER; p++) { setParameter (p, getParameter (p)); }
+	for (int p = 0; p < PARAMETER_NUMBER; p++) { setParameter (p, getParameter (p)); }
 }
 
 void closeOutputParameterFile () { outputParameterFile.close(); }
@@ -1741,7 +1768,7 @@ void readInputParameterFile ()
 	std::istringstream iss;
 	double timestamp;
 	std::string name;
-	double value;
+	float value;
 
 	if (! inputParameterFile) return;
 	iss = std::istringstream (inputParameterLine);
@@ -1765,34 +1792,21 @@ void closeInputParameterFile () { inputParameterFile.close(); }
 void setupParameters ()
 {
 	Parameter p;
-
+	parameters.clear();
+	parameters.resize (PARAMETER_NUMBER);
+	
 	p.id       = PARTICLE_DAMPING;
 	p.name     = "particleDamping";
 	p.str      = "[d] particle damping";
 	p.scancode = SDL_SCANCODE_D;
 	p.keycode  = SDLK_d;
-	p.max      = 1;
-	p.aadd     = 0.001;
-	p.add      = 0.0001;
-	p.sub      = -0.0001;
-	p.ssub     = -0.001;
-	p.min      = 0;
-	p.physics  = false;
-	parameters.push_back (p);
-
-	p.id       = PARTICLE_SPEED;
-	p.name     = "particleSpeed";
-	p.str      = "[s] particle speed";
-	p.scancode = SDL_SCANCODE_S;
-	p.keycode  = SDLK_s;
 	p.max      = FLT_MAX;
-	p.aadd     = 0.0001;
-	p.add      = 0.00001;
-	p.sub      = -0.00001;
-	p.ssub     = -0.0001;
+	p.aadd     = 0.1;
+	p.add      = 0.02;
+	p.sub      = -0.02;
+	p.ssub     = -0.1;
 	p.min      = 0;
-	p.physics  = true;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
 	p.id       = GRAVITATION_FACTOR;
 	p.name     = "gravitationFactor";
@@ -1805,8 +1819,7 @@ void setupParameters ()
 	p.sub      = -0.01;
 	p.ssub     = -0.1;
 	p.min      = -FLT_MAX;
-	p.physics  = true;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
 	p.id       = GRAVITATION_ANGLE;
 	p.name     = "gravitationAngle";
@@ -1819,12 +1832,11 @@ void setupParameters ()
 	p.sub      = -1;
 	p.ssub     = -5;
 	p.min      = -FLT_MAX;
-	p.physics  = false;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
 	p.id       = BODY_X;
 	p.name     = "bodyX";
-	p.str      = "body X";
+	p.str      = "[x] body X";
 	p.scancode = SDL_SCANCODE_X;
 	p.keycode  = SDLK_x;
 	p.max      = 1;
@@ -1833,12 +1845,11 @@ void setupParameters ()
 	p.sub      = -0.01;
 	p.ssub     = -0.1;
 	p.min      = 0;
-	p.physics  = false;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
 	p.id       = BODY_Y;
 	p.name     = "bodyY";
-	p.str      = "body Y";
+	p.str      = "[y] body Y";
 	p.scancode = SDL_SCANCODE_Y;
 	p.keycode  = SDLK_y;
 	p.max      = 1;
@@ -1847,8 +1858,7 @@ void setupParameters ()
 	p.sub      = -0.01;
 	p.ssub     = -0.1;
 	p.min      = 0;
-	p.physics  = false;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
 	p.id       = BODY_WEIGHT;
 	p.name     = "bodyWeight";
@@ -1856,13 +1866,12 @@ void setupParameters ()
 	p.scancode = SDL_SCANCODE_Z;
 	p.keycode  = SDLK_w;
 	p.max      = FLT_MAX;
-	p.aadd     = 5;
-	p.add      = 1;
-	p.sub      = -1;
-	p.ssub     = -5;
+	p.aadd     = 0.1;
+	p.add      = 0.02;
+	p.sub      = -0.02;
+	p.ssub     = -0.1;
 	p.min      = -FLT_MAX;
-	p.physics  = false;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
 	p.id       = BODY_RADIUS;
 	p.name     = "bodyRadius";
@@ -1875,36 +1884,33 @@ void setupParameters ()
 	p.sub      = -0.01;
 	p.ssub     = -0.1;
 	p.min      = 0;
-	p.physics  = true;
-	parameters.push_back (p);
+	parameters[p.id] = p;
 
-	p.id       = BODY_ATTRACT_FACTOR;
-	p.name     = "bodyAttractFactor";
-	p.str      = "[f1] body attract factor";
-	p.scancode = SDL_SCANCODE_F1;
-	p.keycode  = SDLK_F1;
-	p.max      = FLT_MAX;
-	p.aadd     = 0.1;
-	p.add      = 0.01;
-	p.sub      = -0.01;
-	p.ssub     = -0.1;
-	p.min      = 0;
-	p.physics  = false;
-	parameters.push_back (p);
+	// p.id       = BODY_ATTRACT_FACTOR;
+	// p.name     = "bodyAttractFactor";
+	// p.str      = "[f1] body attract factor";
+	// p.scancode = SDL_SCANCODE_F1;
+	// p.keycode  = SDLK_F1;
+	// p.max      = FLT_MAX;
+	// p.aadd     = 0.1;
+	// p.add      = 0.01;
+	// p.sub      = -0.01;
+	// p.ssub     = -0.1;
+	// p.min      = 0;
+	// parameters[p.id] = p;
 
-	p.id       = BODY_REPEL_FACTOR;
-	p.name     = "bodyRepelFactor";
-	p.str      = "[f2] body repel factor";
-	p.scancode = SDL_SCANCODE_F2;
-	p.keycode  = SDLK_F2;
-	p.max      = FLT_MAX;
-	p.aadd     = 0.1;
-	p.add      = 0.01;
-	p.sub      = -0.01;
-	p.ssub     = -0.1;
-	p.min      = 0;
-	p.physics  = false;
-	parameters.push_back (p);
+	// p.id       = BODY_REPEL_FACTOR;
+	// p.name     = "bodyRepelFactor";
+	// p.str      = "[f2] body repel factor";
+	// p.scancode = SDL_SCANCODE_F2;
+	// p.keycode  = SDLK_F2;
+	// p.max      = FLT_MAX;
+	// p.aadd     = 0.1;
+	// p.add      = 0.01;
+	// p.sub      = -0.01;
+	// p.ssub     = -0.1;
+	// p.min      = 0;
+	// parameters[p.id] = p;
 
 	p.id       = PIXEL_INTENSITY;
 	p.name     = "pixelIntensity";
@@ -1917,8 +1923,20 @@ void setupParameters ()
 	p.sub      = -0.001;
 	p.ssub     = -0.01;
 	p.min      = 0;
-	p.physics  = false;
-	parameters.push_back (p);
+	parameters[p.id] = p;
+	
+	p.id       = TIME_FACTOR;
+	p.name     = "timeFactor";
+	p.str      = "[t] time factor";
+	p.scancode = SDL_SCANCODE_T;
+	p.keycode  = SDLK_t;
+	p.max      = FLT_MAX;
+	p.aadd     = 0.5;
+	p.add      = 0.1;
+	p.sub      = -0.1;
+	p.ssub     = -0.5;
+	p.min      = 0;
+	parameters[p.id] = p;
 
 	for (int p = 0; p < PARAMETER_NUMBER; p++) { parameters[p].moy = getParameter (p); }
 }
@@ -1936,16 +1954,16 @@ float getParameter (int parameter)
 {
 	switch (parameter) {
 	case PARTICLE_DAMPING    : return particleDamping;
-	case PARTICLE_SPEED      : return particleSpeed;
 	case GRAVITATION_FACTOR  : return gravitationFactor;
 	case GRAVITATION_ANGLE   : return gravitationAngle;
 	case BODY_X              : return bodyX;
 	case BODY_Y              : return bodyY;
 	case BODY_WEIGHT         : return bodyWeight;
 	case BODY_RADIUS         : return bodyRadius;
-	case BODY_ATTRACT_FACTOR : return bodyAttractFactor;
-	case BODY_REPEL_FACTOR   : return bodyRepelFactor;
+	// case BODY_ATTRACT_FACTOR : return bodyAttractFactor;
+	// case BODY_REPEL_FACTOR   : return bodyRepelFactor;
 	case PIXEL_INTENSITY     : return pixelIntensity;
+	case TIME_FACTOR         : return timeFactor;
 	default                  : return 0;
 	}
 }
@@ -1955,19 +1973,17 @@ void setParameter (int parameter, float value)
 {
 	switch (parameter) {
 	case PARTICLE_DAMPING    : particleDamping = value;   break;
-	case PARTICLE_SPEED      : particleSpeed = value;     break;
 	case GRAVITATION_FACTOR  : gravitationFactor = value; break;
 	case GRAVITATION_ANGLE   : gravitationAngle = value;  break;
 	case BODY_X              : bodyX = value;             break;
 	case BODY_Y              : bodyY = value;             break;
 	case BODY_WEIGHT         : bodyWeight = value;        break;
 	case BODY_RADIUS         : bodyRadius = value;        break;
-	case BODY_ATTRACT_FACTOR : bodyAttractFactor = value; break;
-	case BODY_REPEL_FACTOR   : bodyRepelFactor = value;   break;
+	// case BODY_ATTRACT_FACTOR : bodyAttractFactor = value; break;
+	// case BODY_REPEL_FACTOR   : bodyRepelFactor = value;   break;
 	case PIXEL_INTENSITY     : pixelIntensity = value;    break;
+	case TIME_FACTOR         : timeFactor = value;        break;
 	}
-
-	if (parameters[parameter].physics) { setupPhysics(); }
 
 	if (recordParameters) {
 		struct timeval recordTimer;

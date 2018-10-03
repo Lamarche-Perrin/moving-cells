@@ -63,19 +63,19 @@ void loop ();
 void setup ();
 void setupEvents ();
 void setupParameters ();
-void setupStencil ();
-void setupDistribution ();
-void setupScreens ();
+//void setupStencil ();
+//void setupDistribution ();
+//void setupScreens ();
 void setupThreads ();
 void setupColor ();
-void setupPhysics ();
 void setdown ();
 
 void initParticles (int type);
 void getTime ();
 
-void computeBodies ();
-void computeDistributedBodies ();
+void updatePhysics ();
+//void computeBodies ();
+//void computeDistributedBodies ();
 void computeParticles ();
 void draw ();
 void display ();
@@ -94,11 +94,11 @@ void loadParticles (std::string filename);
 
 void *loop (void *arg);
 	
-void *updateParticles (void *arg);
-void *updateParticlesWithDistribution (void *arg);
-void *moveParticles (void *arg);
+//void *updateParticles (void *arg);
+//void *updateParticlesWithDistribution (void *arg);
+//void *moveParticles (void *arg);
 void *updateAndMoveParticles (void *arg);
-void *applyParticles (void *arg);
+//void *applyParticles (void *arg);
 
 void *clearPixels (void *arg);
 void *applyPixels (void *arg);
@@ -134,15 +134,15 @@ public:
 class Particle
 {
 public:
-	bool alive;
+	//bool alive;
 	float x, y, dx, dy;
-	float r, a, dr, da;
-	cv::Point body;
+	//float r, a, dr, da;
+	//cv::Point body;
 	Particle ();
 
-	void update ();
-	void updateWithDistribution ();
-	void move ();
+	//void update ();
+	//void updateWithDistribution ();
+	//void move ();
 	void updateAndMove ();
 	void apply ();
 };
@@ -151,22 +151,23 @@ public:
 
 // DEFINE PARAMETER METHODS
 
-#define PARTICLE_DAMPING      0
-#define PARTICLE_SPEED        1
+#define GRAVITATION_FACTOR    0
+#define GRAVITATION_ANGLE     1
 
-#define GRAVITATION_FACTOR    2
-#define GRAVITATION_ANGLE     3
+#define PARTICLE_DAMPING      2
+//#define PARTICLE_SPEED        3
 
-#define BODY_X                4
-#define BODY_Y                5
-#define BODY_WEIGHT           6
-#define BODY_RADIUS           7
-#define BODY_ATTRACT_FACTOR   8
-#define BODY_REPEL_FACTOR     9
+#define BODY_X                3
+#define BODY_Y                4
+#define BODY_WEIGHT           5
+#define BODY_RADIUS           6
+// #define BODY_ATTRACT_FACTOR   8
+// #define BODY_REPEL_FACTOR     9
 
-#define PIXEL_INTENSITY      10
+#define PIXEL_INTENSITY       7
+#define TIME_FACTOR           8
 
-#define PARAMETER_NUMBER     11
+#define PARAMETER_NUMBER      9
 
 
 struct Parameter
@@ -185,8 +186,6 @@ public:
 	float sub;
 	float ssub;
 	float min;
-
-	bool physics;
 };
 
 typedef std::vector<Parameter> ParameterVector;
@@ -311,26 +310,26 @@ public:
 
 // DEFINE SCREEN CLASS
 
-struct Screen {
-	char i;
-	bool active;
-	float time;
-	int delay;
+// struct Screen {
+// 	char i;
+// 	bool active;
+// 	float time;
+// 	int delay;
 	
-	int sx, sy, sdx, sdy;
-	int cx, cy, cdx, cdy;
-	cv::Rect srect, crect;
-	cv::Rect srectp, crectp;
+// 	int sx, sy, sdx, sdy;
+// 	int cx, cy, cdx, cdy;
+// 	cv::Rect srect, crect;
+// 	cv::Rect srectp, crectp;
 	
-	Screen (char vi, int vx, int vy, int vdx, int vdy, int vdelay = 0);
+// 	Screen (char vi, int vx, int vy, int vdx, int vdy, int vdelay = 0);
 
-	void set ();
-	void set (int vx, int vy, int vdx, int vdy, int vdelay = 0);
-	void unset ();
-	void swap ();
-};
+// 	void set ();
+// 	void set (int vx, int vy, int vdx, int vdy, int vdelay = 0);
+// 	void unset ();
+// 	void swap ();
+// };
 
-typedef std::vector<Screen> ScreenVector;
+// typedef std::vector<Screen> ScreenVector;
 
 
 // DEFINE COLOR CLASSES
