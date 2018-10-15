@@ -52,35 +52,39 @@
 // DISPLAY
 #define VERBOSE 0
 
-bool displayCloud         = true;
+bool displayCloud         = false;
 //bool displaySDL           = true;
 bool displayFullscreen    = true;
-bool displayParameters    = true;
-bool displayMouse         = true;
+bool displayParameters    = false;
+bool displayMouse         = false;
 bool hideMouse            = true;
 
-bool recordCloud          = false;
-bool recordParameters     = false;
-bool readParameters       = !recordParameters;
+bool recordCloud          = true;
+bool writeParameters      = true;
+bool readParameters       = !writeParameters;
+std::string parameterFilename       = "static-cells-inout-sequence.csv";
+std::string inputParameterFilename  = "static-cells-input-sequence.csv";
+std::string outputParameterFilename = "static-cells-output-sequence.csv";
 
-bool realtimeMotion       = true;
-float realtimeDelay       = 1./30;
+// bool realtimeMotion       = true;
+// float realtimeDelay       = 1./30;
 
 float framePerSecond      = 0;
-float frameLogFrequency   = 2.;
+float frameLogFrequency   = 0;
 int frameFrequency        = 1;
-int frameLimit            = 0; //4096+1;
+int frameLimit            = 7000; //4096+1;
+float constantDelay       = 1./30;
 
-int graphicsWidth         = 1920; //1920; //1024; //540*2; //640;
-int graphicsHeight        = 1080; //1080; //768; //960; //768;
+int graphicsWidth         = 480; //480; //1920; //1024; //540*2; //640;
+int graphicsHeight        = 270; //270; //1080; //768; //960; //768;
 int threadNumber          = 8;
 
-int borderMode            = NO_BORDERS;
+int borderMode            = MIRROR_BORDERS;
 int mouseMode             = SWITCH_ON_CLICK;
 int particleInitMode      = UNIFORM_INIT;
 //bool equationMotion       = true;
 
-int particleNumber        = 1920*1080/9; // 259200
+int particleNumber        = 480*270/4; //480*270/4; //1920*1080; // 259200
 float particleWeight      = 1.;
 //float particleSpeed       = 0.001;
 float particleDamping     = 1;
@@ -120,18 +124,17 @@ float fixedBodyWeight     = 4;
 
 bool withSymmetricBody    = false;
 
-const int maxParticleNumber   = 600000;
+const int maxParticleNumber   = 1920*1080*4;
 const float maxParticleSpeed  = 1000000;
 const int maxThreadNumber     = 16;
 
-//std::string parameterFilename    = "static-cells-parameter-sequence.csv";
 //std::string stencilFilename      = "../tools/stencil.test.png";
 //std::string distributionFilename = "../tools/distribution.brain.csv";
 
 
 // VARIABLES
-#define MILLION 1000000L;
-#define BILLION 1000000000L;
+#define MILLION 1000000L
+#define BILLION 1000000000L
 #define PI 3.14159265
 
 //bool connectedBodies = true;
@@ -149,6 +152,7 @@ std::ifstream inputParameterFile;
 std::ofstream outputParameterFile;
 std::string inputParameterLine;
 
+int mouseX, mouseY;
 SDL_Window *window;
 SDL_Renderer *renderer;
 SDL_Texture *texture;
@@ -157,7 +161,7 @@ ParameterVector parameters;
 
 bool stop;
 int pixelNumber;
-float gravitationDistanceFactor;
+//float gravitationDistanceFactor;
 //float particleSpeedFactor;
 
 float rDistance;
@@ -182,7 +186,8 @@ struct timeval startTimer, endTimer, parameterTimer;
 int frameNb;
 int sumFrameNb;
 float delay;
-float sumDelay = 0;
+float sumDelay;
+float currentDelay;
 
 Particle *particles;
 int *pixels;
@@ -236,6 +241,9 @@ int main (int argc, char *argv[])
 {
 	if (argc > 1) { configFilename = argv[1]; }
 	if (argc > 2) { outputFilename = argv[2]; }
+
+	openInputParameterFile ("static-cells-input-sequence.csv");
+	readParameters = true;
 
 	updatePhysics ();
 	setup ();
@@ -393,24 +401,26 @@ void setup ()
 	sumFrameNb = 0;
 	delay = 0;
 	sumDelay = 0;
+	currentDelay = 0;
 	gettimeofday (&startTimer, NULL);
+	parameterTimer = startTimer;
 
 	initParticles (UNIFORM_INIT);
 
 	// SETUP EVENTS
 	setupEvents ();
 
-	// if (recordParameters) {
-	// 	openOutputParameterFile (parameterFilename);
-	// 	writeOutputParameterFile ();
-	// }
-	// else if (readParameters) { openInputParameterFile (parameterFilename); }
+	if (writeParameters) {
+		openOutputParameterFile (parameterFilename);
+		writeOutputParameterFile ();
+	}
+	else if (readParameters) { openInputParameterFile (parameterFilename); }
 }
 
 
 void setdown ()
 {
-	if (recordParameters) { closeOutputParameterFile(); }
+	if (writeParameters) { closeOutputParameterFile(); }
 	else if (readParameters) { closeInputParameterFile(); }
 }
 
@@ -577,6 +587,9 @@ void getTime()
 		sumDelay = 0;
 		sumFrameNb = 0;
 	}
+
+	if (constantDelay > 0) { delay = constantDelay; }
+	currentDelay += delay;
 }
 
 
@@ -656,13 +669,13 @@ void updatePhysics ()
 
 	rBodyX = bodyX * rDistance;
 	rBodyY = bodyY * rDistance;
-	rBodyWeight = bodyWeight * gravitationDistanceFactor * delay / realtimeDelay;
-	rBodyRadius = bodyRadius * sqrt (pixelNumber) / 2;
+	//rBodyWeight = bodyWeight * gravitationDistanceFactor * delay / realtimeDelay;
+	//rBodyRadius = bodyRadius * sqrt (pixelNumber) / 2;
 
 	rParticleDamping = particleDamping / particleWeight;
 	//rParticleSpeed = particleSpeedFactor * delay / realtimeDelay;
 
-	gravitationDistanceFactor = pow (rDistance / 2, gravitationFactor);
+	//gravitationDistanceFactor = pow (rDistance / 2, gravitationFactor);
 	//particleSpeedFactor = particleSpeed * rDistance;
 }
 
@@ -851,7 +864,20 @@ void draw ()
 		y += 10;
 
 		ss.str("");
-		if (borderMode == MIRROR_BORDERS) { ss << "[b] borders = TRUE"; } else { ss << "borders = FALSE"; }
+		if (borderMode == MIRROR_BORDERS) { ss << "[b] borders = TRUE"; } else { ss << "[b] borders = FALSE"; }
+		str = ss.str();
+		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+
+		ss.str("");
+		ss << "mouse = (" << mouseX << "," << mouseY << ")";
+		str = ss.str();
+		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 30;
+		
+
+		ss.str("");
+		ss << "threads = " << threadNumber;
 		str = ss.str();
 		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
@@ -862,20 +888,29 @@ void draw ()
 		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
 
+
+		struct timeval drawTimer;
+		gettimeofday (&drawTimer, NULL);
+		int seconds = floor ((drawTimer.tv_sec - parameterTimer.tv_sec) + (float) (drawTimer.tv_usec - parameterTimer.tv_usec) / MILLION);
+		int hours = floor (seconds / 3600);
+		seconds = seconds % 3600;
+		int minutes = floor (seconds / 60);
+		seconds = seconds % 60;
+		
 		ss.str("");
-		ss << "threads = " << threadNumber;
+		ss << "time = " << std::setfill('0') << std::setw(2) << hours << ":" << std::setw(2) << minutes << ":" << std::setw(2) << seconds;
+		str = ss.str();
+		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+		y += 20;
+			
+		ss.str("");
+		ss << "frame = " << frameNb;
 		str = ss.str();
 		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
 
 		ss.str("");
 		ss << "graphics = " << graphicsFps << "fps";
-		str = ss.str();
-		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
-		y += 20;
-
-		ss.str("");
-		ss << "frame = " << frameNb;
 		str = ss.str();
 		cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
 		y += 20;
@@ -912,14 +947,13 @@ void display ()
 			switch (event.button.button)
 			{
 			case SDL_BUTTON_LEFT :
-				switch (mouseMode)
-				{
-					//case KEEP_PRESSED : connectedBodies = true; break;
-					//case SWITCH_ON_CLICK : connectedBodies = !connectedBodies; break;
-				}
+				if (bodyWeight != 0) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0)); }
+				else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.5)); }
 				break;
 					
 			case SDL_BUTTON_RIGHT :
+				if (bodyWeight != 0) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0)); }
+				else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 2.5)); }
 				break;
 
 			case SDL_BUTTON_MIDDLE :
@@ -946,8 +980,10 @@ void display ()
 			break;
 
 		case SDL_MOUSEMOTION:
-			setParameter (BODY_X, ((float) event.motion.x) / rDistance);
-			setParameter (BODY_Y, ((float) event.motion.y) / rDistance);
+			mouseX = event.motion.x;
+			mouseY = event.motion.y;
+			setParameter (BODY_X, ((float) mouseX) / rDistance);
+			setParameter (BODY_Y, ((float) mouseY) / rDistance);
 			break;
 
 		case SDL_MOUSEWHEEL:
@@ -999,7 +1035,7 @@ void display ()
 
 				// Control intensity
 			case SDL_SCANCODE_DELETE :
-				if (pixelIntensity > 0) { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 4)); }
+				if (pixelIntensity > 0) { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 0, 5)); }
 				else { events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 4)); }
 				break;
 
@@ -1007,6 +1043,15 @@ void display ()
 			case SDL_SCANCODE_BACKSLASH : events.interrupt (new LinearVariation (PIXEL_INTENSITY, 1, 0.1)); break;
 
 				// Control parameter sequences
+			case SDL_SCANCODE_GRAVE :
+			{
+				openInputParameterFile ("static-cells-input-sequence.csv");
+				openOutputParameterFile ("static-cells-output-sequence.csv");
+				readParameters = true;
+				writeParameters = true;
+			}
+			break;
+			
 			case SDL_SCANCODE_0 : case SDL_SCANCODE_1 : case SDL_SCANCODE_2 : case SDL_SCANCODE_3 : case SDL_SCANCODE_4 : case SDL_SCANCODE_5 : case SDL_SCANCODE_6 : case SDL_SCANCODE_7 : case SDL_SCANCODE_8 : case SDL_SCANCODE_9 :
 			{
 				std::string filename;
@@ -1023,7 +1068,7 @@ void display ()
 				case SDL_SCANCODE_9 : filename = "static-cells-parameter-sequence-9.csv"; break;						
 				}
 
-				if (recordParameters) {
+				if (writeParameters) {
 					openOutputParameterFile (filename);
 					writeOutputParameterFile ();
 				}
@@ -1031,29 +1076,41 @@ void display ()
 				break;
 			}
 
-			case SDL_SCANCODE_PAGEUP :   saveParticles ("particle-positions.csv"); break;
+			case SDL_SCANCODE_PAGEUP :
+			{
+				struct timeval writeTimer;
+				gettimeofday (&writeTimer, NULL);
+				double currentTimestamp = (writeTimer.tv_sec - parameterTimer.tv_sec) + (float) (writeTimer.tv_usec - parameterTimer.tv_usec) / MILLION;
+
+				std::stringstream ss;
+				ss.str("");
+				ss << "particle-positions-" << currentTimestamp << ".csv";
+				saveParticles (ss.str());
+			}
+			break;
+			
 			case SDL_SCANCODE_PAGEDOWN : loadParticles ("particle-positions.csv"); break;
 
 				// Control body weight
 			case SDL_SCANCODE_SPACE :
-				if (bodyWeight != 1.) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.)); }
-				else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.)); }
+				if (bodyWeight != 0) { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0)); }
+				else { events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.5)); }
 				break;
 
 			case SDL_SCANCODE_LEFT :
-				events.interrupt (new LinearVariation (BODY_WEIGHT, 1., 1));
+				events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.75));
 				break;
 
 			case SDL_SCANCODE_UP :
-				events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 0.));
+				events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.));
 				break;
 
 			case SDL_SCANCODE_DOWN :
-				events.interrupt (new LinearVariation (BODY_WEIGHT, 0., 1));
+				events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.));
 				break;
 
 			case SDL_SCANCODE_RIGHT :
-				events.interrupt (new LinearVariation (BODY_WEIGHT, -0.75, 0.01));
+				events.interrupt (new InstantaneousVariation (BODY_WEIGHT, 1.5));
 				break;
 
 				// Control all parameters
@@ -1761,10 +1818,14 @@ void openInputParameterFile (std::string filename) {
 
 void readInputParameterFile ()
 {
-	struct timeval readTimer;
-	gettimeofday (&readTimer, NULL);
-	double currentTimestamp = (readTimer.tv_sec - parameterTimer.tv_sec) + (float) (readTimer.tv_usec - parameterTimer.tv_usec) / MILLION;
-
+				double currentTimestamp;
+				if (constantDelay > 0) { currentTimestamp = currentDelay; }
+				else {
+				struct timeval readTimer;
+				gettimeofday (&readTimer, NULL);
+				currentTimestamp = (readTimer.tv_sec - parameterTimer.tv_sec) + (float) (readTimer.tv_usec - parameterTimer.tv_usec) / MILLION;
+			}
+				
 	std::istringstream iss;
 	double timestamp;
 	std::string name;
@@ -1775,8 +1836,34 @@ void readInputParameterFile ()
 	iss >> timestamp >> name >> value;
 
 	while (timestamp <= currentTimestamp) {
-		if (name == "particlePositions") { loadParticles (value); }
-		else { setParameter (getParameterId (name), value); }
+		if (name == "particlePositions") {
+				std::stringstream ss;
+				ss.str("");
+				ss << "particle-positions-" << value << ".csv";
+				loadParticles (ss.str());
+			}
+		
+		else if (name == "particleInit") { initParticles (UNIFORM_INIT); }
+		
+		else if (name == "borderMode") {
+				if (value == 0) { borderMode = NO_BORDERS; } else { borderMode = MIRROR_BORDERS; }
+			}
+		
+		else {
+				setParameter (getParameterId (name), value, false);
+				if (name == "bodyX") {
+				mouseX = value * rDistance;
+				SDL_WarpMouseGlobal (mouseX, mouseY);
+				SDL_PumpEvents();
+				SDL_FlushEvent (SDL_MOUSEMOTION);
+			}
+				else if (name == "bodyY") {
+				mouseY = value * rDistance;
+				SDL_WarpMouseGlobal (mouseX, mouseY);
+				SDL_PumpEvents();
+				SDL_FlushEvent (SDL_MOUSEMOTION);
+			}
+			}
 		
 		std::getline (inputParameterFile, inputParameterLine);
 
@@ -1866,10 +1953,10 @@ void setupParameters ()
 	p.scancode = SDL_SCANCODE_Z;
 	p.keycode  = SDLK_w;
 	p.max      = FLT_MAX;
-	p.aadd     = 0.1;
-	p.add      = 0.02;
-	p.sub      = -0.02;
-	p.ssub     = -0.1;
+	p.aadd     = 0.05;
+	p.add      = 0.01;
+	p.sub      = -0.01;
+	p.ssub     = -0.05;
 	p.min      = -FLT_MAX;
 	parameters[p.id] = p;
 
@@ -1969,7 +2056,7 @@ float getParameter (int parameter)
 }
 
 
-void setParameter (int parameter, float value)
+void setParameter (int parameter, float value, bool write)
 {
 	switch (parameter) {
 	case PARTICLE_DAMPING    : particleDamping = value;   break;
@@ -1985,7 +2072,7 @@ void setParameter (int parameter, float value)
 	case TIME_FACTOR         : timeFactor = value;        break;
 	}
 
-	if (recordParameters) {
+	if (write && writeParameters) {
 		struct timeval recordTimer;
 		gettimeofday (&recordTimer, NULL);
 		double timestamp = (recordTimer.tv_sec - parameterTimer.tv_sec) + (float) (recordTimer.tv_usec - parameterTimer.tv_usec) / MILLION;
@@ -1994,7 +2081,7 @@ void setParameter (int parameter, float value)
 }
 
 
-void addParameter (int parameter, float value) { setParameter (parameter, getParameter (parameter) + value); }
+void addParameter (int parameter, float value, bool write) { setParameter (parameter, getParameter (parameter) + value, write); }
 
 
 
@@ -2190,3 +2277,4 @@ void SawtoothVariation::stop ()
 	Event::stop ();
 	std::cout << "STOP SAWTOOTH VARIATION ON " << parameters[parameter].name << std::endl;
 }
+

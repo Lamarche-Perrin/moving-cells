@@ -48,21 +48,32 @@ std::string inputFileName = "";
 bool toFile = false;
 std::string outputFileName = "out.avi";
 
-const bool initBlackScreen = false;
+const bool initBlackScreen = true;
 const bool initHeterogeneousDelay = false;
 const bool initVertical = false;
 const bool initReverse = false;
 const bool initSymmetric = false;
 const bool useSymmetric = false;
 
-int frameWidth = 1280; // 640 (cam1)   1280 (cam2)   1024 (screen)
-int frameHeight = 720; // 360 (cam1)    720 (cam2)    768 (screen)
+int frameWidth = 1280; // 640 (cam1)   1280 (cam2)   1024 (cam3)
+int frameHeight = 720; // 360 (cam1)    720 (cam2)    768 (cam3)
 
 const bool flipFrame = false;
 
-const bool cropFrame = false;
-const int cropWidth = 159;
-const int cropHeight = 0;
+const bool cropBorder = true;
+const double borderWidthRatio = 2.596 / 332.644;
+const double borderHeightRatio = 3.124 / 188.776;
+int borderWidth, screenWidth, borderHeight, screenHeight;
+
+double fadeOut = 0;
+double fadeRate = 0;
+double zoom = 1;
+
+bool cropFrame = true;
+double cropLeft = 0.25;
+double cropRight = 0;
+double cropBottom = 0;
+double cropTop = 0;
 
 const bool resizeFrame = false;
 const int windowWidth = 166*4;
@@ -70,8 +81,6 @@ const int windowHeight = 146*4;
 
 const bool parallelComputation = true;
 
-
-const cv::Rect cropRectangle = cv::Rect (cropWidth, cropHeight, frameWidth - 2*cropWidth, frameHeight - 2*cropHeight);
 
 bool stop = false;
 bool blackScreen = initBlackScreen;
@@ -167,7 +176,7 @@ int main (int argc, char *argv[])
 		if (! cam.isOpened()) std::cout << "-> CAN NOT FOUND" << std::endl;
 
 		cam.set (CV_CAP_PROP_FOURCC, CV_FOURCC('M','J','P','G'));
-		cam.set (CV_CAP_PROP_FPS, 30);
+		cam.set (CV_CAP_PROP_FPS, 60);
 		cam.set (CV_CAP_PROP_FRAME_WIDTH, frameWidth);
 		cam.set (CV_CAP_PROP_FRAME_HEIGHT, frameHeight);
 	}
@@ -206,6 +215,12 @@ int main (int argc, char *argv[])
 	colSize = ((float) frameWidth / (float) maxDelay);
 	std::cout << "cols: " << colSize << " pixels / rows: " << rowSize << " pixels" << std::endl;
 
+	borderWidth = round (frameWidth * borderWidthRatio / 2) * 2;
+	screenWidth = (frameWidth - borderWidth) / 2;
+	borderHeight = round (frameHeight * borderHeightRatio / 2) * 2;
+	screenHeight = (frameHeight - borderHeight) / 2;
+
+
 	while (newDelay < maxDelay+1)
 	{
 		cam.read (frameArray[newDelay]);
@@ -229,6 +244,7 @@ int main (int argc, char *argv[])
 		
 	while (!stop)
 	{
+		// Measure time
 		gettimeofday (&endTime, NULL);
 		double deltaTime = (endTime.tv_sec - startTime.tv_sec) + (float) (endTime.tv_usec - startTime.tv_usec) / 1000000L;
 		startTime = endTime;
@@ -246,6 +262,12 @@ int main (int argc, char *argv[])
 			subframeNb = 0;
 		}
 
+		if (fadeRate != 0) {
+			fadeOut += fadeRate * deltaTime;
+			if (fadeOut > 1) { fadeOut = 1; fadeRate = 0; }
+			if (fadeOut < 0) { fadeOut = 0; fadeRate = 0; }
+		}
+			
 		if (newDelay >= maxDelay+2) { newDelay = 0; }
 		
 		displayDelay = newDelay+1 + (maxDelay - startDelay);
@@ -254,12 +276,14 @@ int main (int argc, char *argv[])
 		currentDelay = displayDelay+1;
 		if (currentDelay >= maxDelay+2) { currentDelay -= (maxDelay + 2); }
 
+		// Create new frame
 		if (blackScreen) { finalFrame = cv::Mat (frameHeight, frameWidth, CV_8UC3, cv::Scalar(0, 0, 0)); }
 		else {
 			finalFrame = frameArray[currentDelay].clone();
 			currentPixel = finalFrame.ptr<cv::Vec3b>(0);
 		}
-		
+
+		// Compute new frame
 		struct timeval start, end;
 		gettimeofday (&start, NULL);
 	
@@ -348,10 +372,34 @@ void *displayFrame (void *arg)
 	struct timeval start, end;
 	gettimeofday (&start, NULL);
 
-	if (flipFrame ) { cv::flip (finalFrame, finalFrame, 1); }
-	if (cropFrame) { finalFrame = finalFrame (cropRectangle); }
-	if (resizeFrame) { cv::resize (finalFrame, finalFrame, cv::Size (windowWidth, windowHeight)); }
+	if (zoom > 1) {
+		cv::Rect zoomRectangle = cv::Rect (frameWidth * ((zoom-1)/zoom) / 2, frameHeight * ((zoom-1)/zoom) / 2, frameWidth / zoom, frameHeight / zoom);
+		finalFrame = finalFrame (zoomRectangle);
+	}
 	
+	if (flipFrame ) { cv::flip (finalFrame, finalFrame, 1); }
+
+	if (cropFrame) {
+		const cv::Rect cropRectangle = cv::Rect (frameWidth * cropLeft, frameHeight * cropTop, frameWidth * (1 - cropLeft + cropRight), frameHeight * (1 - cropTop + cropBottom));
+		cv::Mat blackFrame = cv::Mat (frameHeight, frameWidth, CV_8UC3, cv::Scalar(0, 0, 0));
+		finalFrame (cropRectangle).copyTo (blackFrame (cropRectangle));
+		finalFrame = blackFrame;
+	}
+
+	if (cropBorder) {
+		cv::Mat output = cv::Mat (screenHeight * 2, screenWidth * 2, CV_8UC3, cv::Scalar (0, 0, 0));
+
+		finalFrame (cv::Rect (0, 0, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, 0, screenWidth, screenHeight)));
+		finalFrame (cv::Rect (screenWidth + borderWidth, 0, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, 0, screenWidth, screenHeight)));
+		finalFrame (cv::Rect (0, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, screenHeight, screenWidth, screenHeight)));
+		finalFrame (cv::Rect (screenWidth + borderWidth, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, screenHeight, screenWidth, screenHeight)));
+
+		finalFrame = output;
+	}
+	
+	if (resizeFrame) { cv::resize (finalFrame, finalFrame, cv::Size (windowWidth, windowHeight)); }
+	if (fadeOut > 0) { finalFrame.convertTo (finalFrame, -1, 1-fadeOut); }
+
 	//cv::GaussianBlur (*currentFrame, *currentFrame, cv::Size(7,7), 1.5, 1.5);
 	if (toFile) video << finalFrame;
 	else cv::imshow ("webcam-delays", finalFrame);
@@ -379,11 +427,20 @@ void *displayFrame (void *arg)
 			break;
 			
 		case 32 : // Space
+			// if (fadeOut == 0) { fadeRate = 3; }
+			// else if (fadeOut == 1) { fadeRate = -3; }
 			blackScreen = !blackScreen;
+			break;
+
+		case 8 : // Backslash
+			if (fadeOut == 0) { fadeRate = 0.2; }
+			else if (fadeOut == 1) { fadeRate = -0.2; }
 			break;
 
 		case 13 : case 141 : // Enter
 			heterogeneousDelay = !heterogeneousDelay;
+			delay = 120;
+			startDelay = 120;
 			break;
 
 		case 114 : // r
@@ -402,6 +459,14 @@ void *displayFrame (void *arg)
 			vertical = true;
 			break;
 
+		case 99 : // c
+			cropFrame = true;
+			break;
+			
+		case 102 : // f
+			cropFrame = false;
+			break;
+			
 		case 43 : case 171 : // +
 			delay++; if (delay > maxDelay) { delay = maxDelay; }
 			startDelay = delay;
@@ -413,6 +478,9 @@ void *displayFrame (void *arg)
 			startDelay = delay;
 			std::cout << "DELAY: " << (delay-1) << std::endl;
 			break;
+
+		// case 85 : newFocus++; if (newFocus >= 256) { newFocus = 255; } break;
+		// case 86 : newFocus--; if (newFocus < 0) { newFocus = 0; } break;
 		}
 	}
 	

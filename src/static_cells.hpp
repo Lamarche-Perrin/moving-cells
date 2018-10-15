@@ -38,8 +38,8 @@
 #define UNIFORM_INIT              0
 #define RANDOM_INIT               1
 
-#define MIRROR_BORDERS            0
-#define NO_BORDERS                1
+#define NO_BORDERS                0
+#define MIRROR_BORDERS            1
 
 
 // PRE-DEFINITIONS
@@ -103,6 +103,8 @@ void *updateAndMoveParticles (void *arg);
 void *clearPixels (void *arg);
 void *applyPixels (void *arg);
 
+int playAudioTrack (std::string audioFilename);
+void audioCallBack(void *udata, Uint8 *stream, int len);
 
 // CLASSES
 
@@ -201,8 +203,8 @@ void closeInputParameterFile ();
 
 int getParameterId (std::string name);
 float getParameter (int parameter);
-void setParameter (int parameter, float value);
-void addParameter (int parameter, float value);
+void setParameter (int parameter, float value, bool write = true);
+void addParameter (int parameter, float value, bool write = true);
 
 
 // DEFINE EVENT CLASSES

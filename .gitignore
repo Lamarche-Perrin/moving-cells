@@ -18,3 +18,8 @@ build
 # Tool files
 tools/experiments/output
 tools/experiments/config
+tools/partikules/out*
+tools/partikules/*.mp3
+tools/partikules/*.mp4
+tools/partikules/particle-positions*
+
