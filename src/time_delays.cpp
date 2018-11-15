@@ -60,7 +60,7 @@ int frameHeight = 720; // 360 (cam1)    720 (cam2)    768 (cam3)
 
 const bool flipFrame = false;
 
-const bool cropBorder = true;
+const bool cropBorder = false;
 const double borderWidthRatio = 2.596 / 332.644;
 const double borderHeightRatio = 3.124 / 188.776;
 int borderWidth, screenWidth, borderHeight, screenHeight;
@@ -75,9 +75,9 @@ double cropRight = 0;
 double cropBottom = 0;
 double cropTop = 0;
 
-const bool resizeFrame = false;
-const int windowWidth = 166*4;
-const int windowHeight = 146*4;
+const bool resizeFrame = true;
+const int windowWidth = 1920;
+const int windowHeight = 1080;
 
 const bool parallelComputation = true;
 
@@ -397,12 +397,11 @@ void *displayFrame (void *arg)
 		finalFrame = output;
 	}
 	
-	if (resizeFrame) { cv::resize (finalFrame, finalFrame, cv::Size (windowWidth, windowHeight)); }
 	if (fadeOut > 0) { finalFrame.convertTo (finalFrame, -1, 1-fadeOut); }
+	if (resizeFrame) { cv::resize (finalFrame, finalFrame, cv::Size (windowWidth, windowHeight)); }
 
 	//cv::GaussianBlur (*currentFrame, *currentFrame, cv::Size(7,7), 1.5, 1.5);
-	if (toFile) video << finalFrame;
-	else cv::imshow ("webcam-delays", finalFrame);
+	if (toFile) { video << finalFrame; } else { cv::imshow ("webcam-delays", finalFrame); }
 
 	int key = cv::waitKey(1);
 	if (key > 0)

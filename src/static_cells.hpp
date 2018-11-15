@@ -29,6 +29,13 @@
  */
 
 #include <random>
+#include <vector>
+
+#define VERBOSE 0
+#define MILLION 1000000L
+#define BILLION 1000000000L
+#define PI 3.14159265
+
 
 // DEFINE ENUM
 
@@ -42,135 +49,36 @@
 #define MIRROR_BORDERS            1
 
 
-// PRE-DEFINITIONS
-
-struct Body;
-class Particles;
-typedef std::list<Body*> BodyList;
-
-
-// FUNCTIONS
-
-void extractBodies (float *dPixel);
-void displaySensor (cv::Mat *depthFrame);
-void calibrateKinect (int key);
-
-void sigint_handler (int s);
-int scale (float z);
-float linearMap (float value, float min1, float max1, float min2, float max2);
-
-void loop ();
-void setup ();
-void setupEvents ();
-void setupParameters ();
-//void setupStencil ();
-//void setupDistribution ();
-//void setupScreens ();
-void setupThreads ();
-void setupColor ();
-void setdown ();
-
-void initParticles (int type);
-void getTime ();
-
-void updatePhysics ();
-//void computeBodies ();
-//void computeDistributedBodies ();
-void computeParticles ();
-void draw ();
-void display ();
-void record ();
-//void readConfigFile (std::string configFile);
-int ms_sleep (unsigned int ms);
-
-void saveConfig (int index);
-void loadConfig (int index);
-void loadConfig (std::string filename);
-
-void saveParticles (int index);
-void saveParticles (std::string filename);
-void loadParticles (int index);
-void loadParticles (std::string filename);
-
-void *loop (void *arg);
-	
-//void *updateParticles (void *arg);
-//void *updateParticlesWithDistribution (void *arg);
-//void *moveParticles (void *arg);
-void *updateAndMoveParticles (void *arg);
-//void *applyParticles (void *arg);
-
-void *clearPixels (void *arg);
-void *applyPixels (void *arg);
-
-int playAudioTrack (std::string audioFilename);
-void audioCallBack(void *udata, Uint8 *stream, int len);
-
-// CLASSES
-
-struct Pixel
-{
-    int x; int y; int z;
-    Pixel (int cx, int cy, int cz) : x(cx), y(cy), z(cz) {}
-};
-
-
-struct Body
-{
-public:	
-    int index;
-    Body *closestBody;
-    float minDist;
-
-    int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax, pixelNb;
-    int xMinS, xMoyS, xMaxS, yMinS, yMoyS, yMaxS, zMinS, zMoyS, zMaxS;
-
-    Body ();
-    void getClosestBody (BodyList *list);
-    void update (float delay);
-    float getDistance (Body *body);
-    void print ();
-};
-
-
-class Particle
-{
-public:
-	//bool alive;
-	float x, y, dx, dy;
-	//float r, a, dr, da;
-	//cv::Point body;
-	Particle ();
-
-	//void update ();
-	//void updateWithDistribution ();
-	//void move ();
-	void updateAndMove ();
-	void apply ();
-};
-
-
-
-// DEFINE PARAMETER METHODS
+// PARAMETER METHODS
 
 #define GRAVITATION_FACTOR    0
 #define GRAVITATION_ANGLE     1
 
 #define PARTICLE_DAMPING      2
-//#define PARTICLE_SPEED        3
 
 #define BODY_X                3
 #define BODY_Y                4
 #define BODY_WEIGHT           5
 #define BODY_RADIUS           6
-// #define BODY_ATTRACT_FACTOR   8
-// #define BODY_REPEL_FACTOR     9
 
 #define PIXEL_INTENSITY       7
 #define TIME_FACTOR           8
 
 #define PARAMETER_NUMBER      9
 
+
+// CLASS PREDIFINITIONS
+
+class Cloud;
+
+struct ArgStruct {
+	Cloud *cloud;
+	int id;
+	ArgStruct (Cloud *vCloud, int vId) : cloud (vCloud), id (vId) {};
+};
+
+
+// PARAMETER STRUCTURE
 
 struct Parameter
 {
@@ -193,25 +101,14 @@ public:
 typedef std::vector<Parameter> ParameterVector;
 
 
-void openOutputParameterFile (std::string filename);
-void writeOutputParameterFile ();
-void closeOutputParameterFile ();
 
-void openInputParameterFile (std::string filename);
-void readInputParameterFile ();
-void closeInputParameterFile ();
-
-int getParameterId (std::string name);
-float getParameter (int parameter);
-void setParameter (int parameter, float value, bool write = true);
-void addParameter (int parameter, float value, bool write = true);
-
-
-// DEFINE EVENT CLASSES
+// EVENT CLASSES
 
 class Event
 {
 public:
+	Cloud *cloud;
+
 	double startTime;
 	double currentTime;
 	float duration;
@@ -220,7 +117,7 @@ public:
 
 	int parameter;
 
-	Event (int parameter, float duration = 0);
+	Event (Cloud *cloud, int parameter, float duration = 0);
 	bool hasStarted ();
 	bool hasStopped ();
 
@@ -248,13 +145,12 @@ public:
 typedef std::vector<EventList> EventLists;
 
 
-
 class InstantaneousVariation : public Event
 {
 public:
 	float endValue;
 
-	InstantaneousVariation (int parameter, float endValue);
+	InstantaneousVariation (Cloud *cloud, int parameter, float endValue);
 
 	void start ();
 	void stop ();
@@ -268,7 +164,7 @@ public:
 	float startValue;
 	float endValue;
 
-	LinearVariation (int parameter, float endValue, float duration);
+	LinearVariation (Cloud *cloud, int parameter, float endValue, float duration);
 
 	void start ();
 	void stop ();
@@ -284,7 +180,7 @@ public:
 	float amplitude;
 	float frequency;
 
-	SinusoidalVariation (int parameter, float amplitude, float frequency, float duration = 0);
+	SinusoidalVariation (Cloud *cloud, int parameter, float amplitude, float frequency, float duration = 0);
 
 	void start ();
 	void stop ();
@@ -301,7 +197,7 @@ public:
 	float frequency;
 	double intermediateTime;
 	
-	SawtoothVariation (int parameter, float endValue, float frequency, float duration = 0);
+	SawtoothVariation (Cloud *cloud, int parameter, float endValue, float frequency, float duration = 0);
 
 	void start ();
 	void stop ();
@@ -310,31 +206,8 @@ public:
 
 
 
-// DEFINE SCREEN CLASS
 
-// struct Screen {
-// 	char i;
-// 	bool active;
-// 	float time;
-// 	int delay;
-	
-// 	int sx, sy, sdx, sdy;
-// 	int cx, cy, cdx, cdy;
-// 	cv::Rect srect, crect;
-// 	cv::Rect srectp, crectp;
-	
-// 	Screen (char vi, int vx, int vy, int vdx, int vdy, int vdelay = 0);
-
-// 	void set ();
-// 	void set (int vx, int vy, int vdx, int vdy, int vdelay = 0);
-// 	void unset ();
-// 	void swap ();
-// };
-
-// typedef std::vector<Screen> ScreenVector;
-
-
-// DEFINE COLOR CLASSES
+// COLOR CLASSES
 
 typedef struct RgbColor
 {
@@ -345,6 +218,7 @@ typedef struct RgbColor
     unsigned char b;
 } RgbColor;
 
+
 typedef struct HsvColor
 {
 	HsvColor () {};
@@ -354,81 +228,243 @@ typedef struct HsvColor
     unsigned char v;
 } HsvColor;
 
-RgbColor HsvToRgb(HsvColor hsv)
+
+
+// FUNCTIONS
+
+// void extractBodies (float *dPixel);
+// void displaySensor (cv::Mat *depthFrame);
+// void calibrateKinect (int key);
+
+int ms_sleep (unsigned int ms);
+
+
+// SIMPLE STRUCTURES
+
+struct Pixel
 {
-    RgbColor rgb;
-    unsigned char region, remainder, p, q, t;
+    int x; int y; int z;
+    Pixel (int cx, int cy, int cz) : x (cx), y (cy), z (cz) {}
+};
 
-    if (hsv.s == 0)
-    {
-        rgb.r = hsv.v;
-        rgb.g = hsv.v;
-        rgb.b = hsv.v;
-        return rgb;
-    }
 
-    region = hsv.h / 43;
-    remainder = (hsv.h - (region * 43)) * 6; 
+// class Body
+// {
+// public:	
+//     int index;
+//     Body *closestBody;
+//     float minDist;
 
-    p = (hsv.v * (255 - hsv.s)) >> 8;
-    q = (hsv.v * (255 - ((hsv.s * remainder) >> 8))) >> 8;
-    t = (hsv.v * (255 - ((hsv.s * (255 - remainder)) >> 8))) >> 8;
+//     int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax, pixelNb;
+//     int xMinS, xMoyS, xMaxS, yMinS, yMoyS, yMaxS, zMinS, zMoyS, zMaxS;
 
-    switch (region)
-    {
-	case 0:
-		rgb.r = hsv.v; rgb.g = t; rgb.b = p;
-		break;
-	case 1:
-		rgb.r = q; rgb.g = hsv.v; rgb.b = p;
-		break;
-	case 2:
-		rgb.r = p; rgb.g = hsv.v; rgb.b = t;
-		break;
-	case 3:
-		rgb.r = p; rgb.g = q; rgb.b = hsv.v;
-		break;
-	case 4:
-		rgb.r = t; rgb.g = p; rgb.b = hsv.v;
-		break;
-	default:
-		rgb.r = hsv.v; rgb.g = p; rgb.b = q;
-		break;
-    }
+//     Body ();
+//     void getClosestBody (BodyList *list);
+//     void update (float delay);
+//     float getDistance (Body *body);
+//     void print ();
+// };
 
-    return rgb;
-}
+//typedef std::list<Body*> BodyList;
 
-HsvColor RgbToHsv(RgbColor rgb)
+struct Particle
 {
-    HsvColor hsv;
-    unsigned char rgbMin, rgbMax;
+public:
+	float x, y, dx, dy;
+	Particle () : x (0), y (0), dx (0), dy (0) {}
+};
 
-    rgbMin = rgb.r < rgb.g ? (rgb.r < rgb.b ? rgb.r : rgb.b) : (rgb.g < rgb.b ? rgb.g : rgb.b);
-    rgbMax = rgb.r > rgb.g ? (rgb.r > rgb.b ? rgb.r : rgb.b) : (rgb.g > rgb.b ? rgb.g : rgb.b);
 
-    hsv.v = rgbMax;
-    if (hsv.v == 0)
-    {
-        hsv.h = 0;
-        hsv.s = 0;
-        return hsv;
-    }
 
-    hsv.s = 255 * long(rgbMax - rgbMin) / hsv.v;
-    if (hsv.s == 0)
-    {
-        hsv.h = 0;
-        return hsv;
-    }
+// OTHER CLASSES
 
-    if (rgbMax == rgb.r)
-        hsv.h = 0 + 43 * (rgb.g - rgb.b) / (rgbMax - rgbMin);
-    else if (rgbMax == rgb.g)
-        hsv.h = 85 + 43 * (rgb.b - rgb.r) / (rgbMax - rgbMin);
-    else
-        hsv.h = 171 + 43 * (rgb.r - rgb.g) / (rgbMax - rgbMin);
+class Cloud
+{
+public:
+	// GRAPHICS PARAMETERS
+	bool displayParticles     = true;
+	bool displayParameters    = false;
+	bool hideMouse            = true;
+	bool displayMouse         = true;
+	bool displayFullscreen    = true;
 
-    return hsv;
-}
+	bool recordParticles      = false;
+	bool recordParameters     = false;
+	bool readParameters       = !recordParameters;
+	
+	std::string inputParameterFilename  = "static-cells-input-sequence.csv";
+	std::string outputParameterFilename = "static-cells-output-sequence.csv";
+	std::string inoutParameterFilename  = "static-cells-inout-sequence.csv";
+
+	float framePerSecond      = 0;
+	float frameLogFrequency   = 0;
+	int frameFrequency        = 0;
+	int frameLimit            = 0;
+	float constantDelay       = 0;
+
+	int graphicsWidth         = 1920;
+	int graphicsHeight        = 1080;
+	int threadNumber          = 8;
+
+// PHYSICS PARAMETER
+	int borderMode            = MIRROR_BORDERS;
+	int particleInitMode      = UNIFORM_INIT;
+
+	int particleNumber        = 1920 * 1080 / 9;
+	float particleWeight      = 1.;
+	float particleDamping     = 1.;
+
+	float gravitationFactor   = 0.;
+	float gravitationAngle    = 0.;
+	float timeFactor          = 1.;
+
+	float bodyX               = 0.5;
+	float bodyY               = 0.5;
+	float bodyWeight          = 0.;
+	float bodyRadius          = 0.;
+
+	bool withFixedBody        = false;
+	float fixedBodyX          = 1./3;
+	float fixedBodyY          = 1./3;
+	float fixedBodyWeight     = 4;
+
+	RgbColor particleColorMin = RgbColor (  0,   0,   0);
+	RgbColor particleColorMoy = RgbColor (  3,   6,  16);
+	RgbColor particleColorMax = RgbColor (255, 255, 255);
+
+	float particleRatioMin    = 0.;
+	float particleRatioMoy    = 0.5;
+	float particleRatioMax    = 1000.;
+
+	float pixelIntensity      = 1.;
+
+// PROGRAM PARAMETERS
+	static const int maxParticleNumber   = 1920 * 1080 * 4;
+	static const int maxThreadNumber     = 16;
+	const float maxParticleSpeed         = 1000000.;
+	
+// PROGRAM VARIABLES
+	int graphicsFps = 0;
+
+	std::string configFilename = "";
+	std::string outputFilename = "";
+	std::ifstream inputParameterFile;
+	std::ofstream outputParameterFile;
+	std::string inputParameterLine;
+
+	int mouseX, mouseY;
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	SDL_Texture *texture;
+	SDL_Event event;
+	ParameterVector parameters;
+
+	bool stop;
+	int pixelNumber;
+	EventList events;
+
+	int frameNb;
+	int sumFrameNb;
+	float delay;
+	float sumDelay;
+	float currentDelay;
+
+	struct timeval startTimer;
+	struct timeval endTimer;
+	struct timeval parameterTimer;
+
+// PHYSICS VARIABLES
+	float rDistance;
+	float rDelay;
+	float rGravitationFactor;
+	float rGravitationAngle;
+	float rBodyRadius;
+	float rBodyX;
+	float rBodyY;
+	float rBodyWeight;
+	float rParticleDamping;
+	float rPixelSize;
+	float rWidthBorder;
+	float rWidthBorderDoubled;
+	float rHeightBorder;
+	float rHeightBorderDoubled;
+
+// PARTICLE VARIABLES
+	Particle *particles;
+	int *pixels;
+	cv::Mat *frame;
+	cv::Mat finalFrame;
+	int frameIndex;
+	int firstFrameIndex = 0;
+
+	int *particleRedArray;
+	int *particleGreenArray;
+	int *particleBlueArray;
+
+	float bodyLeftWeight;
+	float bodyRightWeight;
+	float bodyTopWeight;
+	float bodyBottomWeight;
+
+// THREAD VARIABLES
+	void *status;
+	pthread_attr_t attr;
+
+	pthread_t threads [maxThreadNumber];
+	int firstParticle [maxThreadNumber];
+	int lastParticle [maxThreadNumber];
+	int firstPixel [maxThreadNumber];
+	int lastPixel [maxThreadNumber];
+
+	Cloud ();
+	~Cloud ();
+	
+	void setup ();
+	void setupEvents ();
+	void setupParameters ();
+	void setupThreads ();
+	void setupColor ();
+	void setdown ();
+
+	void run ();
+
+	void initParticles (int type);
+	void getTime ();
+
+	void updatePhysics ();
+	void computeParticles ();
+	void computeFrame ();
+	void displayFrame ();
+	void recordFrame ();
+
+	void recordParticlePositions (int index);
+	void recordParticlePositions (std::string filename);
+	void readParticlePositions (int index);
+	void readParticlePositions (std::string filename);
+
+	static void *updateAndMoveParticles (void *args);
+	void updateAndMoveParticles (int id);
+
+	static void *clearPixels (void *args);
+	void clearPixels (int id);
+
+	static void *applyPixels (void *args);
+	void applyPixels (int id);
+
+	void openOutputParameterFile (std::string filename);
+	void writeOutputParameterFile ();
+	void closeOutputParameterFile ();
+
+	void openInputParameterFile (std::string filename);
+	void readInputParameterFile ();
+	void closeInputParameterFile ();
+
+	int getParameterId (std::string name);
+	float getParameter (int parameter);
+	void setParameter (int parameter, float value, bool write = true);
+	void addParameter (int parameter, float value, bool write = true);
+};
+
+
+
 

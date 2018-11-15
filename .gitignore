@@ -21,5 +21,6 @@ tools/experiments/config
 tools/partikules/out*
 tools/partikules/*.mp3
 tools/partikules/*.mp4
+tools/partikules/*.png
 tools/partikules/particle-positions*
 

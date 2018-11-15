@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <opencv2/opencv.hpp>
 
 double borderWidthRatio = 2.596 / 332.644;
@@ -17,10 +18,10 @@ int main (int argc, char *argv[])
 	cv::Mat input = cv::imread (inputFile);
 	cv::Size size = input.size();
 
-	int borderWidth = round (size.width * borderWidthRatio / 2) * 2;
+	int borderWidth = round (size.width * borderWidthRatio);
 	int screenWidth = (size.width - borderWidth) / 2;
 
-	int borderHeight = round (size.height * borderHeightRatio / 2) * 2;
+	int borderHeight = round (size.height * borderHeightRatio);
 	int screenHeight = (size.height - borderHeight) / 2;
 
 	// std::cout << " image = " << size.width << " x " << size.height << std::endl;
@@ -34,7 +35,11 @@ int main (int argc, char *argv[])
 	input (cv::Rect (0, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, screenHeight, screenWidth, screenHeight)));
 	input (cv::Rect (screenWidth + borderWidth, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, screenHeight, screenWidth, screenHeight)));
 
-	cv::imwrite (outputFile, output);
+	std::vector<int> params;
+    params.push_back (CV_IMWRITE_PNG_COMPRESSION);
+    params.push_back (0);
+	
+	cv::imwrite (outputFile, output, params);
 
 	return EXIT_SUCCESS;
 }
