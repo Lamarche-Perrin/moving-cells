@@ -36,14 +36,19 @@ int main (int argc, char *argv[])
 {
 	srand (time (NULL));
 
-	pthread_t cloudThread;
 	Cloud *cloud = new Cloud ();
+	cloud->graphicsWidth  = 1280;
+	cloud->graphicsHeight = 720;
+	cloud->particleNumber = 1280 * 720 / 4;
+	cloud->init();
+	
+	pthread_t cloudThread;
 	int rcCloud = pthread_create (&cloudThread, NULL, &Cloud::run, (void *) cloud);
-	if (rcCloud) { std::cout << "Error:unable to create thread," << rcCloud << std::endl; exit (-1); }
+	if (rcCloud) { std::cout << "Error: Unable to create thread " << rcCloud << std::endl; exit (-1); }
 
 	void *status;
 	rcCloud = pthread_join (cloudThread, &status);
-	if (rcCloud) { std::cout << "Error:unable to join," << rcCloud << std::endl; exit(-1); }
+	if (rcCloud) { std::cout << "Error: Unable to join thread " << rcCloud << std::endl; exit(-1); }
 
 	return 0;
 }

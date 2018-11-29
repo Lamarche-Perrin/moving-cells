@@ -51,6 +51,7 @@
 
 #define UNIFORM_INIT              0
 #define RANDOM_INIT               1
+#define DYNAMIC_INIT              2
 
 #define NO_BORDERS                0
 #define MIRROR_BORDERS            1
@@ -287,9 +288,10 @@ class Cloud
 public:
 	// GRAPHICS PARAMETERS
 	bool displayParticles     = true;
+	bool displayBodies        = true;
 	bool displayParameters    = false;
+	bool displayCoordinates   = false;
 	bool hideMouse            = true;
-	bool displayMouse         = true;
 	bool displayFullscreen    = true;
 
 	bool recordParticles      = false;
@@ -427,7 +429,8 @@ public:
 
 	Cloud ();
 	~Cloud ();
-	
+
+	void init ();
 	void setup ();
 	void setupEvents ();
 	void setupParameters ();

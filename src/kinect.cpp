@@ -28,7 +28,6 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #include <iostream>
 #include <cstdio>
 #include <signal.h>
@@ -36,6 +35,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include <opencv2/opencv.hpp>
 
@@ -49,7 +49,9 @@
 // }
 
 
-Kinect::Kinect ()
+Kinect::Kinect () {}
+
+void Kinect::init ()
 {
 	// std::string program_path (argv[0]);
 	// size_t executable_name_idx = program_path.rfind ("moving-cells");
@@ -246,6 +248,8 @@ void Kinect::run ()
 		listener->release (frames);
 		delete depthFrame;
 		//libfreenect2::this_thread::sleep_for(libfreenect2::chrono::milliseconds(100));
+
+		usleep (waitingTime);
 	}
 }
 
@@ -392,6 +396,8 @@ void Kinect::extractObjects (float *dPixel)
 			object->xMoy /= object->pixelNb;
 			object->yMoy /= object->pixelNb;
 			object->zMoy /= object->pixelNb;
+			
+			object->ratio = (object->xMax - object->xMin) / (object->yMax - object->yMin);
 			
 			if (object->pixelNb >= objectMinSize) { newObjectList->push_back(object); }
 			else { delete object; }
@@ -545,8 +551,10 @@ void Kinect::extractObjects (float *dPixel, libfreenect2::Frame *undepth)
 						object->rzMoy = (object->rzMax + object->rzMin) / 2;
 					}
 
-					if (object->xMoy < depthCropLeft || object->xMoy >= (depthWidth - depthCropRight) || object->yMoy < depthCropTop || object->yMoy >= (depthHeight -depthCropBottom)) delete object;
-					else newObjectList->push_back(object);
+					object->ratio = (object->rxMax - object->rxMin) / (object->ryMax - object->ryMin);
+
+					if (object->xMoy < depthCropLeft || object->xMoy >= (depthWidth - depthCropRight) || object->yMoy < depthCropTop || object->yMoy >= (depthHeight -depthCropBottom)) { delete object; }
+					else { newObjectList->push_back(object); }
 				}
 				else { delete object; }
 			}
@@ -600,7 +608,7 @@ void Kinect::displaySensor (cv::Mat *depthFrame)
 			cv::putText(*depthFrame, strIndex, cv::Point(10,object->zMax), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
 			ss.str("");
-			ss << "(" << round(object->rxMoy*100)/100 << ", " << round(object->ryMoy*100)/100 << ", " << round(object->rzMoy*100)/100 << ")";
+			ss << "(" << round(object->rxMoy*100)/100 << ", " << round(object->ryMoy*100)/100 << ", " << round(object->rzMoy*100)/100 << ") -> " << round(object->ratio*100)/100;
 			strIndex = ss.str();
 			cv::putText(*depthFrame, strIndex, cv::Point(10,20), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(4500), 2);
 
@@ -695,9 +703,10 @@ void Kinect::displaySensor (cv::Mat *depthFrame)
 			depthFrame->at<float>(cv::Point(x,zMaxy)) = 4500;
 		}
 	}
-	
+
+	cv::resize (*depthFrame, *depthFrame, cv::Size(), 2, 2); 
 	cv::imshow ("depth", *depthFrame / 4500.);
-	//cv::resizeWindow ("depth", 600, 600);
+	//cv::resizeWindow ("depth", );
 }
 
 
@@ -755,18 +764,16 @@ void Kinect::computeObjects ()
 				object->x = linearMap (object->rxMoy, xMin, xMax, graphicsWidth, 0);
 				object->y = linearMap (object->ryMoy, yMin, yMax, graphicsHeight, 0);
 
-				float ratio = (object->rxMax - object->rxMin) / (object->ryMax - object->ryMin);
-				if (ratio < rMoy) object->weight = linearMap (ratio, rMin, rMoy, weightMax, 0);
-				else object->weight = linearMap (ratio, rMoy, rMax, 0, weightMin);
+				if (object->ratio < rMoy) { object->weight = linearMap (object->ratio, rMin, rMoy, weightMax, 0); }
+				else { object->weight = linearMap (object->ratio, rMoy, rMax, 0, weightMin); }
 			}
 			
 			else {
-				object->x = linearMap (object->rxMoy, xMin, xMax, 0, graphicsWidth);
-				object->y = linearMap (object->rzMoy, zMin, zMax, graphicsHeight, 0);
+				object->x = linearMap (object->rxMoy, xMin, xMax, 0, graphicsWidth / sqrt (graphicsWidth * graphicsHeight));
+				object->y = linearMap (object->rzMoy, zMin, zMax, graphicsHeight / sqrt (graphicsWidth * graphicsHeight), 0);
 
-				float ratio = (object->rxMax - object->rxMin) / (object->ryMax - object->ryMin);
-				if (ratio < rMoy) object->weight = linearMap (ratio, rMin, rMoy, weightMax, 0);
-				else object->weight = linearMap (ratio, rMoy, rMax, 0, weightMin);
+				if (object->ratio < rMoy) { object->weight = linearMap (object->ratio, rMin, rMoy, weightMax, 0); }
+				else { object->weight = linearMap (object->ratio, rMoy, rMax, 0, weightMin); }
 			}
 				
 			// std::cout << object->rxMoy << " " << object->rzMoy << " " << ratio << std::endl;

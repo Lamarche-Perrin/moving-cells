@@ -81,6 +81,7 @@ public:
 
 	int rpixelNb;
     float rxMin, rxMoy, rxMax, ryMin, ryMoy, ryMax, rzMin, rzMoy, rzMax;
+	float ratio;
 	bool rextrema;
 
 	float x, y, weight;
@@ -100,47 +101,48 @@ public:
 class Kinect
 {
 public:
-	const float thresholdAdd = 100;
-	const int objectMinSize = 1000;
-	const bool reverseXAxis = false;
-	const bool reverseYAxis = true;
+	float thresholdAdd = 100;
+	int objectMinSize = 1000;
+	bool reverseXAxis = false;
+	bool reverseYAxis = true;
 
-	const bool useSpeed = false;
-	const bool realPositioning = true;
-	const bool realMoy = true;
+	bool useSpeed = false;
+	bool realPositioning = true;
+	bool realMoy = true;
 
-	const bool thresholdFromFile = false;
+	bool thresholdFromFile = false;
 
-	const bool allowKinectCalibration = false;
-	const bool allowSensorDisplay = true;
-	const bool allowGraphicsDisplay = true;
+	bool allowKinectCalibration = false;
+	bool allowSensorDisplay = true;
+	bool allowGraphicsDisplay = true;
 
-	const int graphicsWidth = 1024; //1920;
-	const int graphicsHeight = 768; //1080;
-	const int distanceMax = 0;
+	int graphicsWidth = 1024; //1920;
+	int graphicsHeight = 768; //1080;
+	int distanceMax = 0;
+	int waitingTime = 300000;
 
-	const int depthWidth = 512;
-	const int depthHeight = 424;
-	const int depthDepth = 450;
+	int depthWidth = 512;
+	int depthHeight = 424;
+	int depthDepth = 450;
 
-	const bool fromAbove = false;
-	const float xMin = -2.30;
-	const float xMax = 2.30;
-	const float yMin = 0;
-	const float yMax = 0;
-	const float zMin = 2.00;
-	const float zMax = 4.40;
-	const float rMin = 0.45/1.75;
-	const float rMoy = 1.35/1.75;
-	const float rMax = 1.65/1.75;
+	bool fromAbove = false;
+	float xMin = -2.30;
+	float xMax = 2.30;
+	float yMin = 0;
+	float yMax = 0;
+	float zMin = 2.00;
+	float zMax = 4.40;
+	float rMin = 0.45/1.75;
+	float rMoy = 1.35/1.75;
+	float rMax = 1.65/1.75;
 
-	const float weightMax = 1.;
-	const float weightMin = -1.;
+	float weightMax = 1.;
+	float weightMin = -1.;
 
-	const int depthCropLeft = 0;
-	const int depthCropRight = 0;
-	const int depthCropTop = 0;
-	const int depthCropBottom = 0;
+	int depthCropLeft = 0;
+	int depthCropRight = 0;
+	int depthCropTop = 0;
+	int depthCropBottom = 0;
 
 	int objectCounter;
 	bool stop;
@@ -173,8 +175,9 @@ public:
 	Kinect ();
 	~Kinect ();
 
-	static void *run (void *arg);
+	void init ();
 	void run ();
+	static void *run (void *arg);
 
 	void extractObjects (float *dPixel);
 	void extractObjects (float *dPixel, libfreenect2::Frame *undepth);

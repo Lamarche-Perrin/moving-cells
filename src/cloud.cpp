@@ -45,18 +45,21 @@
 
 // FUNCTIONS
 
-Cloud::Cloud ()
-{
-	addBody (mouseBody);
-	updateBodies ();
-	updatePhysics ();
-	setup ();
-}
+Cloud::Cloud () {}
 
 
 Cloud::~Cloud ()
 {
 	setdown();
+}
+
+
+void Cloud::init ()
+{
+	addBody (mouseBody);
+	updateBodies ();
+	updatePhysics ();
+	setup ();
 }
 
 
@@ -117,6 +120,7 @@ void Cloud::run ()
 		if (frameLimit > 0 && frameNb > frameLimit) stop = true;
 	}
 }
+
 
 void Cloud::setup ()
 {
@@ -314,13 +318,32 @@ void Cloud::initParticles (int type)
 	}
 	break;
 
+	case DYNAMIC_INIT :
+	{
+		for (int i = 0; i < particleNumber; i++)
+		{
+			Particle *particle = &particles[i];
+			float rX = rand() % graphicsWidth;
+			float rY = rand() % graphicsHeight;
+
+			particle->x = rX / rDistance;
+			particle->y = rY / rDistance;
+
+			float speed = ((double) rand() / (RAND_MAX)) * rDistance / 10000;
+			float angle = rand() % 360;
+			particle->dx = speed * cos (angle);
+			particle->dy = speed * sin (angle);
+		}	
+	}
+	break;
+
 	case UNIFORM_INIT :
 	{
 		int index = 0;
-		float bin = sqrt((float)(graphicsWidth*graphicsHeight)/particleNumber);
-		for (float rX = bin/2; rX <= graphicsWidth - bin/2; rX += bin)
+		float bin = sqrt ((float) (graphicsWidth * graphicsHeight) / particleNumber);
+		for (float rX = 0; rX < graphicsWidth; rX += bin)
 		{
-			for (float rY = bin/2; rY <= graphicsHeight - bin/2; rY += bin)
+			for (float rY = 0; rY < graphicsHeight; rY += bin)
 			{
 				Particle *particle = &particles[index++];
 				
@@ -465,10 +488,13 @@ void Cloud::computeFrame ()
 {
 	finalFrame = frame->clone();
 
-	if (displayMouse) {
-		cv::circle (finalFrame, cv::Point(mouseBody->rX,mouseBody->rY), 1, cv::Scalar(250,200,100), 3);
+	if (displayBodies) {
+		for (int j = 0; j < bodyList->size(); j++) {
+			Body *body = bodyList->at(j);
+			cv::circle (finalFrame, cv::Point (body->rX, body->rY), 1, cv::Scalar(250,200,100), 3);
+		}
 	}
-		
+
 	if (displayParameters)
 	{
 		int x = 10;
@@ -546,6 +572,25 @@ void Cloud::computeFrame ()
 		y += 20;
 
 	}
+
+	if (displayCoordinates)
+	{
+		int x = 400;
+		int y = 20;
+		
+		std::stringstream ss;
+		std::string str;
+		
+		for (int j = 0; j < bodyList->size(); j++) {
+			Body *body = bodyList->at(j);
+				 
+			ss.str("");
+			ss << "(" << body->x << ", " << body->y << ") -> " << body->weight;
+			str = ss.str();
+			cv::putText (finalFrame, str, cv::Point(x,y), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255,255,255), 2);
+			y += 20;
+		}
+	}
 }
 
 
@@ -573,12 +618,12 @@ void Cloud::displayFrame ()
 			{
 			case SDL_BUTTON_LEFT :
 				if (mouseBody->weight != 0) { events.interrupt (new InstantaneousVariation (this, BODY_WEIGHT, 0)); }
-				else { events.interrupt (new InstantaneousVariation (this, BODY_WEIGHT, 1.5)); }
+				else { events.interrupt (new InstantaneousVariation (this, BODY_WEIGHT, 1)); }
 				break;
 					
 			case SDL_BUTTON_RIGHT :
 				if (mouseBody->weight != 0) { events.interrupt (new InstantaneousVariation (this, BODY_WEIGHT, 0)); }
-				else { events.interrupt (new InstantaneousVariation (this, BODY_WEIGHT, 2.5)); }
+				else { events.interrupt (new InstantaneousVariation (this, BODY_WEIGHT, 2)); }
 				break;
 
 			case SDL_BUTTON_MIDDLE :
@@ -637,6 +682,10 @@ void Cloud::displayFrame ()
 				
 			case SDL_SCANCODE_BACKSPACE : 
 				initParticles (RANDOM_INIT);
+				break;
+				
+			case SDL_SCANCODE_EQUALS : 
+				initParticles (DYNAMIC_INIT);
 				break;
 				
 			case SDL_SCANCODE_B :
@@ -724,6 +773,14 @@ void Cloud::displayFrame ()
 				break;
 
 				// Control all parameters
+			case SDL_SCANCODE_KP_PERIOD :
+				for (int p = 0; p < PARAMETER_NUMBER; p++) {
+					if (keyboard[parameters[p].scancode]) {
+						setParameter (p, parameters[p].min);
+					}
+				}
+				break;
+
 			case SDL_SCANCODE_KP_0 :
 				for (int p = 0; p < PARAMETER_NUMBER; p++) {
 					if (keyboard[parameters[p].scancode]) {
@@ -877,6 +934,11 @@ void Cloud::updateAndMoveParticles (int id)
 		particle->dx += ddx * rDelay;
 		particle->dy += ddy * rDelay;
 
+		if (particle->dx > maxParticleSpeed) { particle->dx = maxParticleSpeed; }
+		if (particle->dx < -maxParticleSpeed) { particle->dx = -maxParticleSpeed; }
+		if (particle->dy > maxParticleSpeed) { particle->dy = maxParticleSpeed; }
+		if (particle->dy < -maxParticleSpeed) { particle->dy = -maxParticleSpeed; }
+		
 		particle->x += (particle->dx - ddx * rDelay / 2) * rDelay;
 		particle->y += (particle->dy - ddy * rDelay / 2) * rDelay;
 
