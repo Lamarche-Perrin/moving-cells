@@ -70,7 +70,7 @@ double fadeRate = 0;
 double zoom = 1;
 
 bool cropFrame = true;
-double cropLeft = 0.25;
+double cropLeft = 0.15;
 double cropRight = 0;
 double cropBottom = 0;
 double cropTop = 0;

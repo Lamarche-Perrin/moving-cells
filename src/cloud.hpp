@@ -28,8 +28,15 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+
+#include <fstream>
 #include <random>
 #include <vector>
+#include <list>
+
+#include <SDL.h>
+#include <opencv2/opencv.hpp>
+
 
 #define VERBOSE 0
 #define MILLION 1000000L
@@ -70,6 +77,8 @@
 // CLASS PREDIFINITIONS
 
 class Cloud;
+class Body;
+typedef std::vector<Body*> BodyList;
 
 struct ArgStruct {
 	Cloud *cloud;
@@ -241,31 +250,26 @@ int ms_sleep (unsigned int ms);
 
 // SIMPLE STRUCTURES
 
-struct Pixel
-{
-    int x; int y; int z;
-    Pixel (int cx, int cy, int cz) : x (cx), y (cy), z (cz) {}
-};
-
-
-// class Body
+// struct Pixel
 // {
-// public:	
-//     int index;
-//     Body *closestBody;
-//     float minDist;
-
-//     int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax, pixelNb;
-//     int xMinS, xMoyS, xMaxS, yMinS, yMoyS, yMaxS, zMinS, zMoyS, zMaxS;
-
-//     Body ();
-//     void getClosestBody (BodyList *list);
-//     void update (float delay);
-//     float getDistance (Body *body);
-//     void print ();
+//     int x; int y; int z;
+//     Pixel (int cx, int cy, int cz) : x (cx), y (cy), z (cz) {}
 // };
 
-//typedef std::list<Body*> BodyList;
+
+struct Body
+{
+public:
+	int id;
+	float x; float y;
+	float rX; float rY;
+	float weight;
+	float radius;
+
+    Body () : id (-1), x (0), y (0), rX (0), rY (0), weight (0), radius (0) {};
+    Body (float vX, float vY, float vWeight) : id (-1), x (vX), y (vY), rX (0), rY (0), weight (vWeight), radius (0) {};
+};
+
 
 struct Particle
 {
@@ -318,15 +322,20 @@ public:
 	float gravitationAngle    = 0.;
 	float timeFactor          = 1.;
 
-	float bodyX               = 0.5;
-	float bodyY               = 0.5;
-	float bodyWeight          = 0.;
-	float bodyRadius          = 0.;
+	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	BodyList *bodyList = new BodyList ();
+	BodyList *newBodyList = new BodyList ();
+	Body *mouseBody = new Body ();
 
-	bool withFixedBody        = false;
-	float fixedBodyX          = 1./3;
-	float fixedBodyY          = 1./3;
-	float fixedBodyWeight     = 4;
+    // float bodyX               = 0.5;
+	// float bodyY               = 0.5;
+	// float bodyWeight          = 0.;
+	// float bodyRadius          = 0.;
+
+	// bool withFixedBody        = false;
+	// float fixedBodyX          = 1./3;
+	// float fixedBodyY          = 1./3;
+	// float fixedBodyWeight     = 4;
 
 	RgbColor particleColorMin = RgbColor (  0,   0,   0);
 	RgbColor particleColorMoy = RgbColor (  3,   6,  16);
@@ -378,10 +387,10 @@ public:
 	float rDelay;
 	float rGravitationFactor;
 	float rGravitationAngle;
-	float rBodyRadius;
-	float rBodyX;
-	float rBodyY;
-	float rBodyWeight;
+	// float rBodyRadius;
+	// float rBodyX;
+	// float rBodyY;
+	// float rBodyWeight;
 	float rParticleDamping;
 	float rPixelSize;
 	float rWidthBorder;
@@ -426,16 +435,21 @@ public:
 	void setupColor ();
 	void setdown ();
 
+	static void *run (void *arg);
 	void run ();
 
 	void initParticles (int type);
 	void getTime ();
 
+	void updateBodies ();
 	void updatePhysics ();
 	void computeParticles ();
 	void computeFrame ();
 	void displayFrame ();
 	void recordFrame ();
+
+	void addBody (Body *body);
+	void clearBodies ();
 
 	void recordParticlePositions (int index);
 	void recordParticlePositions (std::string filename);
