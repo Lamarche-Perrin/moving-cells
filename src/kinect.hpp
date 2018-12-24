@@ -34,6 +34,10 @@
 #include <libfreenect2/packet_pipeline.h>
 #include <libfreenect2/registration.h>
 
+#include <pthread.h>
+#include <opencv2/opencv.hpp>
+
+#include <list>
 
 // DEFINE ENUM
 

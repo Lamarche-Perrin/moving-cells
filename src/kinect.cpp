@@ -34,10 +34,7 @@
 #include <fstream>
 #include <sys/time.h>
 #include <errno.h>
-#include <pthread.h>
 #include <unistd.h>
-
-#include <opencv2/opencv.hpp>
 
 #include "kinect.hpp"
 

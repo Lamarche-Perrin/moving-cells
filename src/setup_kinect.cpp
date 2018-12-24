@@ -28,35 +28,47 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <unistd.h>
 
-#include "cloud3D.hpp"
+#include "kinect.hpp"
 
 
 int main (int argc, char *argv[])
 {
 	srand (time (NULL));
 
-	Cloud *cloud = new Cloud ();
+	Kinect *kinect = new Kinect ();
+	kinect->graphicsWidth  = 1280;
+	kinect->graphicsHeight = 720;
 
-	cloud->cloudWidth = 16./10;
-	cloud->cloudHeight = 9./10;
-	cloud->cloudDepth = 16./10;
-	cloud->particleNumber = 2304 * 64;
+	kinect->xMin = -1.3;
+	kinect->yMin =  1.3;
+	kinect->zMin =  1.5;
+	kinect->zMax =  2.5;
+	kinect->rMin =  0.3;
+	kinect->rMoy =  0.6;
+	kinect->rMax =  1.0;
+
+	kinect->weightMin = -0.5;
+	kinect->weightMax =  1.0;
+
+	kinect->thresholdFromFile = false;
+	kinect->allowSensorDisplay = true;
+	kinect->waitingTime = 10000;
+	kinect->init();
 	
-	cloud->graphicsWidth  = 1920;
-	cloud->graphicsHeight = 1080;
+	pthread_t kinectThread;
+	int rcKinect = pthread_create (&kinectThread, NULL, &Kinect::run, (void *) kinect);
+	if (rcKinect) { std::cout << "Error: Unable to create thread " << rcKinect << std::endl; exit (-1); }
 
-	//cloud->addBody (new Body (8, 4.5, 8, 10));
-	cloud->init();
-
-	pthread_t cloudThread;
-	int rcCloud = pthread_create (&cloudThread, NULL, &Cloud::run, (void *) cloud);
-	if (rcCloud) { std::cout << "Error: Unable to create thread " << rcCloud << std::endl; exit (-1); }
+	while (! kinect->stop) { usleep (30000); };
 
 	void *status;
-	rcCloud = pthread_join (cloudThread, &status);
-	if (rcCloud) { std::cout << "Error: Unable to join thread " << rcCloud << std::endl; exit(-1); }
+	rcKinect = pthread_join (kinectThread, &status);
+	if (rcKinect) { std::cout << "Error: Unable to join thread " << rcKinect << std::endl; exit(-1); }
 
+	delete kinect;
+	
 	return 0;
 }
 

@@ -42,13 +42,13 @@ int main (int argc, char *argv[])
 	kinect->graphicsWidth  = 1280;
 	kinect->graphicsHeight = 720;
 
-	kinect->xMin = -1.3;
-	kinect->yMin =  1.3;
-	kinect->zMin =  1.5;
-	kinect->zMax =  2.5;
-	kinect->rMin =  0.3;
-	kinect->rMoy =  0.6;
-	kinect->rMax =  1.0;
+	kinect->xMin = -1.8;
+	kinect->yMin =  1.8;
+	kinect->zMin =  2.0;
+	kinect->zMax =  4.2;
+	kinect->rMin =  0.30;
+	kinect->rMoy =  0.65;
+	kinect->rMax =  0.95;
 
 	kinect->weightMin = -0.5;
 	kinect->weightMax =  1.0;
@@ -65,8 +65,10 @@ int main (int argc, char *argv[])
 	Cloud *cloud = new Cloud ();
 	cloud->graphicsWidth  = 1280;
 	cloud->graphicsHeight = 720;
-	cloud->particleNumber = 1280 * 720 / 4;
+	
+	cloud->particleNumber = 1280 * 720 / 6;
 	cloud->displayBodies  = false;
+	cloud->particleDamping = 0.5;
 	cloud->init();
 
 	pthread_t cloudThread;
@@ -96,7 +98,7 @@ int main (int argc, char *argv[])
 	if (! kinect->stop) {
 		kinect->stop = true;
 		void *status;
-		rcKinect = pthread_join (cloudThread, &status);
+		rcKinect = pthread_join (kinectThread, &status);
 		if (rcKinect) { std::cout << "Error: Unable to join thread " << rcKinect << std::endl; exit(-1); }
 	}
 	
