@@ -62,7 +62,7 @@ void Kinect::init ()
 	pipeline = new libfreenect2::OpenGLPacketPipeline();
 	dev = freenect2.openDevice (serial, pipeline);
 
-	bool viewer_enabled = true;
+	//bool viewer_enabled = true;
 
 	if (dev == 0) { std::cout << "failure opening device!" << std::endl; return; }
 
@@ -79,7 +79,7 @@ void Kinect::init ()
 	std::cout << "device firmware: " << dev->getFirmwareVersion() << std::endl;
 	registration = new libfreenect2::Registration (dev->getIrCameraParams(), dev->getColorCameraParams());
 	
-	size_t framecount = 0;
+	//size_t framecount = 0;
 	
 	// if (allowKinectCalibration)
 	// {
@@ -93,12 +93,12 @@ void Kinect::init ()
 	thresholdFrame = 0;
     objectList = new ObjectList();
 
-	struct timeval kinectStartTimer, kinectEndTimer;
+	struct timeval kinectStartTimer; // kinectEndTimer;
 	gettimeofday (&kinectStartTimer, NULL);
 
-	int kinectFrameCounter = 0;
-	double kinectDelay = 0;
-	double kinectSumDelay = 0;
+	// int kinectFrameCounter = 0;
+	// double kinectDelay = 0;
+	// double kinectSumDelay = 0;
 
 	stop = false;
 
@@ -160,7 +160,7 @@ void Kinect::run ()
 		libfreenect2::Frame *depth = frames[libfreenect2::Frame::Depth];
 		cv::Mat *depthFrame = new cv::Mat (depth->height, depth->width, CV_32FC1, depth->data);
 
-		libfreenect2::Frame *undepth;
+		libfreenect2::Frame *undepth = NULL;
 		if (realPositioning) {
 			undepth = new libfreenect2::Frame (depthWidth, depthHeight, 4);
 			registration->undistortDepth (depth, undepth);
@@ -176,8 +176,8 @@ void Kinect::run ()
 			
 			if (thresholdFrame != 0) { delete thresholdFrame; }
 			thresholdFrame = new cv::Mat(depth->height, depth->width, CV_32FC1, double(0));
-			for (int x = 0; x < depth->width; x++)
-				for (int y = 0; y < depth->height; y++)
+			for (unsigned int x = 0; x < depth->width; x++)
+				for (unsigned int y = 0; y < depth->height; y++)
 					if (depthFrame->at<float>(cv::Point(x,y)) > 0)
 					{ thresholdFrame->at<float>(cv::Point(x,y)) = depthFrame->at<float>(cv::Point(x,y)) - thresholdAdd; }
 					else { thresholdFrame->at<float>(cv::Point(x,y)) = 0; }
@@ -193,7 +193,7 @@ void Kinect::run ()
 		// APPLY THRESHOLD TO CURRENT FRAME
 		float *dPixel = depthFrame->ptr<float>(0);
 		float *tPixel = thresholdFrame->ptr<float>(0);
-		for (int i = 0; i < depth->width*depth->height; i++)
+		for (unsigned int i = 0; i < depth->width*depth->height; i++)
 			if ((tPixel[i] != 0 && dPixel[i] > tPixel[i]) || (distanceMax != 0 && dPixel[i] > distanceMax)) { dPixel[i] = 0; }
 
 

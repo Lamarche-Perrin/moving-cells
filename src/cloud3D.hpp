@@ -134,6 +134,7 @@ public:
 	int parameter;
 
 	Event (Cloud *cloud, int parameter, float duration = 0);
+	virtual ~Event ();
 	bool hasStarted ();
 	bool hasStopped ();
 

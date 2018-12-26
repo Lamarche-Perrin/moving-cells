@@ -267,8 +267,8 @@ int main(int argc, char *argv[])
 			float realWidth = 1080.0 * 512.0 / 424.0;
 			cv::Mat cropped (CRMat, cv::Rect ((int) ((1920.0 - realWidth)/2), 0, (int)(realWidth), 1080));
 
-			float displayWidth = 720.0 * realWidth / 1080.0;
-			//cv::resize (cropped, cropped, cv::Size((int)(displayWidth),720));
+			// float displayWidth = 720.0 * realWidth / 1080.0;
+			// cv::resize (cropped, cropped, cv::Size((int)(displayWidth),720));
 			cv::imshow ("time-ghosts", cropped);
 		}
 
@@ -315,7 +315,7 @@ void fillDepthMat (float *pixel)
 		{
 			if (pixel[i] == 0)
 			{
-				int ni; float sum = 0; int nb = 0;
+				float sum = 0; int nb = 0;
 
 				addNeighbour(pixel, i-1-initialWidth, sum, nb);
 				addNeighbour(pixel, i-initialWidth, sum, nb);

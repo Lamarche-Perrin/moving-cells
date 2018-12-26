@@ -122,7 +122,7 @@ int main () {
 		alGenBuffers (1, &buffer);
 
 		std::vector<ALshort> finalSamples = std::vector<ALshort> (sampleNumber);
-		for (unsigned int i = 0; i < sampleNumber; i++) { finalSamples[i] = (ALshort) currentSamples[i]; }
+		for (ALsizei i = 0; i < sampleNumber; i++) { finalSamples[i] = (ALshort) currentSamples[i]; }
 		alBufferData (buffer, sampleFormat, &finalSamples[0], sampleNumber * sizeof (ALushort), sampleRate);
 		if (alGetError() != AL_NO_ERROR) { std::cerr << "Problem while feeding samples" << std::endl; return EXIT_FAILURE; } //else { std::cout << "Feeding samples" << std::endl; }
 
@@ -193,7 +193,7 @@ void displayFrame () {
 void sinWave (std::vector<ALdouble> &samples, double amplitude, double frequency)
 {
 	ALfloat time = currentTime;
-	for (unsigned int i = 0; i < sampleNumber; i++) {
+	for (ALsizei i = 0; i < sampleNumber; i++) {
 		samples[i] = amplitude * cos (2 * PI * frequency * time);
 		time += sampleStep;
 	}
@@ -202,14 +202,14 @@ void sinWave (std::vector<ALdouble> &samples, double amplitude, double frequency
 
 void addWave (std::vector<ALdouble> &samples, const std::vector<ALdouble> &samplesToAdd)
 {
-	for (unsigned int i = 0; i < sampleNumber; i++) { samples[i] += samplesToAdd[i]; }
+	for (ALsizei i = 0; i < sampleNumber; i++) { samples[i] += samplesToAdd[i]; }
 }
 
 
 void amWave (std::vector<ALdouble> &samples, double amplitude, double frequency)
 {
 	ALfloat time = currentTime;
-	for (unsigned int i = 0; i < sampleNumber; i++) {
+	for (ALsizei i = 0; i < sampleNumber; i++) {
 		samples[i] *= amplitude * cos (2 * PI * frequency * time);
 		time += sampleStep;
 	}
@@ -220,7 +220,7 @@ void fmWave (std::vector<ALdouble> &samples, double amplitude, double frequency,
 	if (deltaFrequency == 0) { deltaFrequency = frequency; }
 	ALfloat time = currentTime;
 	ALdouble sampleSum = 0;
-	for (unsigned int i = 0; i < sampleNumber; i++) {
+	for (ALsizei i = 0; i < sampleNumber; i++) {
 		sampleSum += samples[i];
 		samples[i] = amplitude * cos (2 * PI * frequency * time + 2 * PI * deltaFrequency * sampleSum * sampleStep);
 		time += sampleStep;
@@ -233,7 +233,7 @@ void printWave (std::vector<ALdouble> &samples, std::string filename) {
 	file.open (filename, std::ios::out | std::ios::trunc);
 
 	ALfloat time = currentTime;
-	for (unsigned int i = 0; i < windowSampleNumber; i++) {
+	for (ALsizei i = 0; i < windowSampleNumber; i++) {
 		file << time << " " << samples[i] << "\n";
 		time += sampleStep;
 	}
@@ -248,14 +248,14 @@ void plotWave (std::vector<ALdouble> &samples) {
 	plot = cv::Mat (windowHeight, windowWidth, CV_8UC3, black);
 
 	double max = 0;
-	for (unsigned int i = 0; i < windowSampleNumber; i++) { if (abs (samples[i]) > max) { max = abs (samples[i]); } }
+	for (ALsizei i = 0; i < windowSampleNumber; i++) { if (abs (samples[i]) > max) { max = abs (samples[i]); } }
 
 	double x1 = 0;
 	double y1 = samples[0] * windowHeight / (2 * max) + windowHeight / 2;
 	double x2;
 	double y2;
 	
-	for (unsigned int i = 0; i < windowSampleNumber-1; i++) {
+	for (ALsizei i = 0; i < windowSampleNumber-1; i++) {
 		x2 = x1 + windowWidth / windowSampleNumber;
 		y2 = samples[i+1] * windowHeight / (2 * max) + windowHeight / 2;
 		//std::cout << x1 << " " << y1 << " " << x2 << " " << y2 << std::endl;
@@ -389,7 +389,6 @@ int testOpenAL ()
 int makeSound ()
 {
 	// Parameters
-	double duration = 5;
 	double frequency1 = 440;
 	double amplitude1 = 1000;
 	double frequency2 = 4;

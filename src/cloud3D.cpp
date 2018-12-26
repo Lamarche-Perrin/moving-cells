@@ -160,7 +160,7 @@ void Cloud::setup ()
 			if (SDL_CreateWindowAndRenderer (graphicsWidth, graphicsHeight, windowMode, &window, &renderer) < 0) { std::cerr << "Error creating window or renderer: " << SDL_GetError() << std::endl; SDL_Quit(); }
 			else {
 				texture = SDL_CreateTexture (renderer, SDL_PIXELFORMAT_BGR24, SDL_TEXTUREACCESS_STREAMING, graphicsWidth, graphicsHeight);
-				if (hideMouse) { int mouseStatus = SDL_ShowCursor (SDL_DISABLE); }
+				if (hideMouse) { SDL_ShowCursor (SDL_DISABLE); }
 			}
 		}
 	}
@@ -428,7 +428,7 @@ void Cloud::updatePhysics ()
 
 void Cloud::projectBodies ()
 {
-	for (int j = 0; j < bodyList->size(); j++) {
+	for (unsigned int j = 0; j < bodyList->size(); j++) {
 		Body *body = bodyList->at(j);
 
 		std::vector<cv::Point3f> objectPoints;
@@ -572,7 +572,7 @@ void Cloud::computeFrame ()
 	finalFrame = frame->clone();
 
 	if (displayBodies) {
-		for (int j = 0; j < bodyList->size(); j++) {
+		for (unsigned int j = 0; j < bodyList->size(); j++) {
 			Body *body = bodyList->at(j);
 			cv::circle (finalFrame, cv::Point (body->rX, body->rY), 1, cv::Scalar(250,200,100), 3);
 		}
@@ -664,7 +664,7 @@ void Cloud::computeFrame ()
 		std::stringstream ss;
 		std::string str;
 		
-		for (int j = 0; j < bodyList->size(); j++) {
+		for (unsigned int j = 0; j < bodyList->size(); j++) {
 			Body *body = bodyList->at(j);
 				 
 			ss.str("");
@@ -807,7 +807,8 @@ void Cloud::displayFrame ()
 				case SDL_SCANCODE_6 : filename = "static-cells-parameter-sequence-6.csv"; break;
 				case SDL_SCANCODE_7 : filename = "static-cells-parameter-sequence-7.csv"; break;
 				case SDL_SCANCODE_8 : filename = "static-cells-parameter-sequence-8.csv"; break;
-				case SDL_SCANCODE_9 : filename = "static-cells-parameter-sequence-9.csv"; break;						
+				case SDL_SCANCODE_9 : filename = "static-cells-parameter-sequence-9.csv"; break;
+				default : break;
 				}
 
 				if (recordParameters) {
@@ -883,18 +884,22 @@ void Cloud::displayFrame ()
 						case SDL_SCANCODE_KP_9 :        value += parameters[p].add; break;
 						case SDL_SCANCODE_KP_MULTIPLY : value += parameters[p].sub; break;
 						case SDL_SCANCODE_KP_MINUS :    value += parameters[p].ssub; break;
+						default : break;
 						}
 							
 						switch (event.key.keysym.scancode)
 						{
 						case SDL_SCANCODE_KP_PLUS : case SDL_SCANCODE_KP_9 :         if (value > parameters[p].max) { value = parameters[p].max; } break;
 						case SDL_SCANCODE_KP_MULTIPLY : case SDL_SCANCODE_KP_MINUS : if (value < parameters[p].min) { value = parameters[p].min; } break;
+						default : break;
 						}
 							
 						setParameter (p, value);
 					}
 				}
 				break;
+
+			default : break;
 			}
 			break;
 				
@@ -998,7 +1003,7 @@ void Cloud::updateParticles (int id)
 		cv::Point3f spd = particleSpeed[i];
 		cv::Point3f acc (- rParticleDamping * spd.x, - rParticleDamping * spd.y, - rParticleDamping * spd.z);
 
-		for (int j = 0; j < bodyList->size(); j++) {
+		for (unsigned int j = 0; j < bodyList->size(); j++) {
 			Body *body = bodyList->at(j);
 			if (body->weight == 0) continue;
 
@@ -1538,8 +1543,14 @@ float EventList::step (float delay)
 }
 
 
-Event::Event (Cloud *vCloud, int vParameter, float vDuration) : cloud (vCloud), parameter (vParameter), duration (vDuration) {}
+Event::Event (Cloud *vCloud, int vParameter, float vDuration)
+{
+	cloud = vCloud;
+	parameter = vParameter;
+	duration = vDuration;
+}
 
+Event::~Event () {}
 
 void Event::start () {
 	started = true;

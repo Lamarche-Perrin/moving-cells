@@ -96,18 +96,18 @@ cv::VideoWriter video;
 cv::Mat *frameArray;
 cv::Mat finalFrame;
 
-int newDelay;
-int displayDelay;
+unsigned int newDelay;
+unsigned int displayDelay;
 
-int currentDelay;
+unsigned int currentDelay;
 cv::Mat *currentFrame;
 cv::Vec3b *currentPixel;
 
-int workingDelay;
+unsigned int workingDelay;
 cv::Mat *workingFrame;
 cv::Vec3b *workingPixel;
 
-int rowSize, colSize;
+unsigned int rowSize, colSize;
 
 void *status;
 pthread_attr_t attr;
@@ -195,8 +195,8 @@ int main (int argc, char *argv[])
 		std::cout << "Input codec type: " << strCodec << std::endl;
 	}
 	
-	double time;
-	double subtime;
+	double time = 0;
+	double subtime = 0;
 	struct timeval startTime, endTime;
 	gettimeofday (&startTime, NULL);
 
@@ -343,8 +343,6 @@ int main (int argc, char *argv[])
 		}
 
 		gettimeofday (&end, NULL);
-		double delta = (end.tv_sec - start.tv_sec) + (float) (end.tv_usec - start.tv_usec) / 1000000L;
-
 		displayDelay = newDelay;
 		newDelay++;
 		
@@ -410,7 +408,7 @@ void *displayFrame (void *arg)
 		std::cout << "KEY: " << key << std::endl;
 
 		if ((key >= 48 && key <= 57) || (key >= 176 && key <= 185)) {
-			int newDelay = 1;
+			unsigned int newDelay = 1;
 			if (key >= 48 && key <= 57) { newDelay = (key - 48) * 15 + 1; }
 			if (key >= 176 && key <= 185) { newDelay = (key - 176) * 15 + 1; }
 			if (newDelay > maxDelay) { newDelay = maxDelay; }
@@ -484,7 +482,6 @@ void *displayFrame (void *arg)
 	}
 	
 	gettimeofday (&end, NULL);
-	double delta = (end.tv_sec - start.tv_sec) + (float) (end.tv_usec - start.tv_usec) / 1000000L;
 
 	if (parallelComputation) { pthread_exit (NULL); }
 }
@@ -503,7 +500,6 @@ void *getFrame (void *arg)
 	}
 	
 	gettimeofday (&end, NULL);
-	double delta = (end.tv_sec - start.tv_sec) + (float) (end.tv_usec - start.tv_usec) / 1000000L;
 
 	if (parallelComputation) { pthread_exit (NULL); }
 }
@@ -525,7 +521,7 @@ void *computeVertical (void *arg)
 
 		float lastCol = (d+1) * ((float) frameWidth / (float) delay);
 
-		for (unsigned int c = (int) firstCol; c < (int) lastCol; c++)
+		for (unsigned int c = (unsigned int) firstCol; c < (unsigned int) lastCol; c++)
 		{
 			unsigned int i = c;
 			for (int r = 0; r < frameHeight; r++)
@@ -557,7 +553,7 @@ void *computeVerticalSymmetric (void *arg)
 
 		float lastCol = (d+1) * ((float) frameWidth / (float) delay);
 
-		for (unsigned int c = (int) firstCol; c < (int) lastCol; c++)
+		for (unsigned int c = (unsigned int) firstCol; c < (unsigned int) lastCol; c++)
 		{
 			unsigned int i = c;
 			for (int r = 0; r < frameHeight; r++)
@@ -598,7 +594,7 @@ void *computeVerticalReverse (void *arg)
 
 		float lastCol = (delay-(d+1)) * ((float) frameWidth / (float) delay);
 
-		for (unsigned int c = (int) firstCol; c > (int) lastCol; c--)
+		for (unsigned int c = (unsigned int) firstCol; c > (unsigned int) lastCol; c--)
 		{
 			unsigned int i = c;
 			for (int r = 0; r < frameHeight; r++)
@@ -630,7 +626,7 @@ void *computeVerticalReverseSymmetric (void *arg)
 
 		float lastCol = (delay/2-(d+1)) * ((float) frameWidth / (float) delay);
 
-		for (unsigned int c = (int) firstCol; c > (int) lastCol; c--)
+		for (unsigned int c = (unsigned int) firstCol; c > (unsigned int) lastCol; c--)
 		{
 			unsigned int i = c;
 			for (int r = 0; r < frameHeight; r++)
@@ -673,7 +669,7 @@ void *computeHorizontal (void *arg)
 
 		float lastRow = (d+1) * ((float) frameHeight / (float) delay);
 
-		for (unsigned int r = (int) firstRow; r < (int) lastRow; r++)
+		for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
 		{
 			unsigned int i = r * frameWidth;
 			for (int c = 0; c < frameWidth; c++)
@@ -705,7 +701,7 @@ void *computeHorizontalSymmetric (void *arg)
 
 		float lastRow = (d+1) * ((float) frameHeight / (float) delay);
 
-		for (unsigned int r = (int) firstRow; r < (int) lastRow; r++)
+		for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
 		{
 			unsigned int i = r * frameWidth;
 			for (int c = 0; c < frameWidth; c++)
@@ -745,7 +741,7 @@ void *computeHorizontalSymmetricBis (void *arg)
 
 		float lastRow = (d+1) * ((float) frameHeight / (float) delay);
 
-		for (unsigned int r = (int) firstRow; r < (int) lastRow; r++)
+		for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
 		{
 			unsigned int i = r * frameWidth;
 			for (int c = 0; c < frameWidth/2; c++)
@@ -770,7 +766,7 @@ void *computeHorizontalSymmetricBis (void *arg)
 
 		float lastRow = (delay-(d+1)) * ((float) frameHeight / (float) delay);
 
-		for (unsigned int r = (int) firstRow; r > (int) lastRow; r--)
+		for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
 		{
 			unsigned int i = r * frameWidth + frameWidth/2;
 			for (int c = 0; c < frameWidth/2; c++)
@@ -801,7 +797,7 @@ void *computeHorizontalReverse (void *arg)
 
 		float lastRow = (delay-(d+1)) * ((float) frameHeight / (float) delay);
 
-		for (unsigned int r = (int) firstRow; r > (int) lastRow; r--)
+		for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
 		{
 			unsigned int i = r * frameWidth;
 			for (int c = 0; c < frameWidth; c++)
@@ -833,7 +829,7 @@ void *computeHorizontalReverseSymmetric (void *arg)
 
 		float lastRow = (delay/2-(d+1)) * ((float) frameHeight / (float) delay);
 
-		for (unsigned int r = (int) firstRow; r > (int) lastRow; r--)
+		for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
 		{
 			unsigned int i = r * frameWidth;
 			for (int c = 0; c < frameWidth; c++)
