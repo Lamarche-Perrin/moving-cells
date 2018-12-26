@@ -418,7 +418,7 @@ void Cloud::updatePhysics ()
 	rDelay = delay * timeFactor;
 	//rDistance = sqrt (pixelNumber);
 	//rPixelSize = 1 / rDistance;
-	rGravitationFactor = (gravitationFactor+1) / 3;
+	rGravitationFactor = gravitationFactor / 2;
 	rGravitationAngle = gravitationAngle * PI / 180;
 	rParticleDamping = particleDamping / particleWeight;
 
@@ -439,6 +439,20 @@ void Cloud::projectBodies ()
 
 		body->rX = imagePoints.front().x;
 		body->rY = imagePoints.front().y;
+
+		body->rYaw = body->yaw * PI / 180;
+		body->rPitch = body->pitch * PI / 180;
+		body->rRoll = body->roll * PI / 180;
+		
+		body->rotationMatrix [0][0] = cos (body->rRoll) * cos (body->rYaw);
+		body->rotationMatrix [0][1] = cos (body->rRoll) * sin (body->rYaw) * sin (body->rPitch) - sin (body->rRoll) * cos (body->rPitch);
+		body->rotationMatrix [0][2] = cos (body->rRoll) * sin (body->rYaw) * cos (body->rPitch) + sin (body->rRoll) * sin (body->rPitch);
+		body->rotationMatrix [1][0] = sin (body->rRoll) * cos (body->rYaw);
+		body->rotationMatrix [1][1] = sin (body->rRoll) * sin (body->rYaw) * sin (body->rPitch) + cos (body->rRoll) * cos (body->rPitch);
+		body->rotationMatrix [1][2] = sin (body->rRoll) * sin (body->rYaw) * cos (body->rPitch) - cos (body->rRoll) * sin (body->rPitch);
+		body->rotationMatrix [2][0] = - sin (body->rYaw);
+		body->rotationMatrix [2][1] = cos (body->rYaw) * sin (body->rPitch);
+		body->rotationMatrix [2][2] = cos (body->rYaw) * cos (body->rPitch);
 	}
 }
 
@@ -991,16 +1005,39 @@ void Cloud::updateParticles (int id)
 			float distanceX = pos.x - body->x;
 			float distanceY = pos.y - body->y;
 			float distanceZ = pos.z - body->z;
-	
-			float factor = pow (pow (distanceX, 2) + pow (distanceY, 2) + pow (distanceZ, 2), rGravitationFactor);
+
+			float rDistanceX = distanceX * body->rotationMatrix[0][0] + distanceY * body->rotationMatrix[0][1] + distanceZ * body->rotationMatrix[0][2];
+			float rDistanceY = distanceX * body->rotationMatrix[1][0] + distanceY * body->rotationMatrix[1][1] + distanceZ * body->rotationMatrix[1][2];
+			float rDistanceZ = distanceX * body->rotationMatrix[2][0] + distanceY * body->rotationMatrix[2][1] + distanceZ * body->rotationMatrix[2][2];
+			
+			float rDistanceXYZ = sqrt (pow (rDistanceX, 2) + pow (rDistanceY, 2) + pow (rDistanceZ, 2));
+			float rDistanceXZ = sqrt (pow (rDistanceX, 2) + pow (rDistanceZ, 2));
+
+			float factor = pow (rDistanceXYZ, gravitationFactor);
 			if (factor == 0) continue;
 
-			acc.x -= body->weight * distanceX / factor;
-			acc.y -= body->weight * distanceY / factor;
-			acc.z -= body->weight * distanceZ / factor;
-			// float angle = atan2 (distanceY, distanceX);
-			// ddx -= body->weight * cos (angle + rGravitationAngle) / factor;
-			// ddy -= body->weight * sin (angle + rGravitationAngle) / factor;
+			float rAccXYZ = - body->weight / factor;
+			// float rAccX -= body->weight * rDistanceX / (rDistanceXYZ * factor);
+			// float rAccY -= body->weight * rDistanceY / (rDistanceXYZ * factor);
+			// float rAccZ -= body->weight * rDistanceZ / (rDistanceXYZ * factor);
+			
+			float cylindricalAngle = (1 - gravitationCylinder) * asin (rDistanceY / rDistanceXYZ);
+			float rAccY = rAccXYZ * sin (cylindricalAngle);
+
+			float rDistanceY2 = rDistanceXZ * sin (cylindricalAngle);
+			float rDistanceXYZ2 = sqrt (pow (rDistanceX, 2) + pow (rDistanceY2, 2) + pow (rDistanceZ, 2));
+
+			float rAccXZ = rAccXYZ * rDistanceXZ / rDistanceXYZ2;
+			// float rAccX += rAccXYZ * rDistanceX / rDistanceXYZ2;
+			// float rAccZ += rAccXYZ * rDistanceZ / rDistanceXYZ2;
+				
+			float angle = atan2 (rDistanceZ, rDistanceX);
+			float rAccX = rAccXZ * cos (angle + rGravitationAngle);
+			float rAccZ = rAccXZ * sin (angle + rGravitationAngle);
+
+			acc.x += rAccX * body->rotationMatrix[0][0] + rAccY * body->rotationMatrix[1][0] + rAccZ * body->rotationMatrix[2][0];
+			acc.y += rAccX * body->rotationMatrix[0][1] + rAccY * body->rotationMatrix[1][1] + rAccZ * body->rotationMatrix[2][1];
+			acc.z += rAccX * body->rotationMatrix[0][2] + rAccY * body->rotationMatrix[1][2] + rAccZ * body->rotationMatrix[2][2];
 		}
 
 		// Apply motion
@@ -1232,6 +1269,19 @@ void Cloud::setupParameters ()
 	p.min      = -FLT_MAX;
 	parameters[p.id] = p;
 
+	p.id       = GRAVITATION_CYLINDER;
+	p.name     = "gravitationCylinder";
+	p.str      = "[c] gravitation cylinder";
+	p.scancode = SDL_SCANCODE_C;
+	p.keycode  = SDLK_c;
+	p.max      = 1;
+	p.aadd     = 0.1;
+	p.add      = 0.01;
+	p.sub      = -0.01;
+	p.ssub     = -0.1;
+	p.min      = 0;
+	parameters[p.id] = p;
+
 	p.id       = GRAVITATION_ANGLE;
 	p.name     = "gravitationAngle";
 	p.str      = "[a] gravitation angle";
@@ -1282,6 +1332,45 @@ void Cloud::setupParameters ()
 	p.sub      = -0.01;
 	p.ssub     = -0.1;
 	p.min      = 0;
+	parameters[p.id] = p;
+
+	p.id       = BODY_YAW;
+	p.name     = "bodyYaw";
+	p.str      = "[k] body yaw";
+	p.scancode = SDL_SCANCODE_K;
+	p.keycode  = SDLK_k;
+	p.max      = FLT_MAX;
+	p.aadd     = 5;
+	p.add      = 1;
+	p.sub      = -1;
+	p.ssub     = -5;
+	p.min      = -FLT_MAX;
+	parameters[p.id] = p;
+
+	p.id       = BODY_PITCH;
+	p.name     = "bodyPitch";
+	p.str      = "[l] body pitch";
+	p.scancode = SDL_SCANCODE_L;
+	p.keycode  = SDLK_l;
+	p.max      = FLT_MAX;
+	p.aadd     = 5;
+	p.add      = 1;
+	p.sub      = -1;
+	p.ssub     = -5;
+	p.min      = -FLT_MAX;
+	parameters[p.id] = p;
+
+	p.id       = BODY_ROLL;
+	p.name     = "bodyRoll";
+	p.str      = "[m] body roll";
+	p.scancode = SDL_SCANCODE_SEMICOLON;
+	p.keycode  = SDLK_SEMICOLON;
+	p.max      = FLT_MAX;
+	p.aadd     = 5;
+	p.add      = 1;
+	p.sub      = -1;
+	p.ssub     = -5;
+	p.min      = -FLT_MAX;
 	parameters[p.id] = p;
 
 	p.id       = BODY_WEIGHT;
@@ -1351,17 +1440,21 @@ int Cloud::getParameterId (std::string name)
 float Cloud::getParameter (int parameter)
 {
 	switch (parameter) {
-	case PARTICLE_DAMPING    : return particleDamping;
-	case GRAVITATION_FACTOR  : return gravitationFactor;
-	case GRAVITATION_ANGLE   : return gravitationAngle;
-	case BODY_X              : return mouseBody->x;
-	case BODY_Y              : return mouseBody->y;
-	case BODY_Z              : return mouseBody->z;
-	case BODY_WEIGHT         : return mouseBody->weight;
-	case BODY_RADIUS         : return mouseBody->radius;
-	case PIXEL_INTENSITY     : return pixelIntensity;
-	case TIME_FACTOR         : return timeFactor;
-	default                  : return 0;
+	case PARTICLE_DAMPING     : return particleDamping;
+	case GRAVITATION_FACTOR   : return gravitationFactor;
+	case GRAVITATION_CYLINDER : return gravitationCylinder;
+	case GRAVITATION_ANGLE    : return gravitationAngle;
+	case BODY_X               : return mouseBody->x;
+	case BODY_Y               : return mouseBody->y;
+	case BODY_Z               : return mouseBody->z;
+	case BODY_YAW             : return mouseBody->yaw;
+	case BODY_PITCH           : return mouseBody->pitch;
+	case BODY_ROLL            : return mouseBody->roll;
+	case BODY_WEIGHT          : return mouseBody->weight;
+	case BODY_RADIUS          : return mouseBody->radius;
+	case PIXEL_INTENSITY      : return pixelIntensity;
+	case TIME_FACTOR          : return timeFactor;
+	default                   : return 0;
 	}
 }
 
@@ -1369,16 +1462,20 @@ float Cloud::getParameter (int parameter)
 void Cloud::setParameter (int parameter, float value, bool write)
 {
 	switch (parameter) {
-	case PARTICLE_DAMPING    : particleDamping = value;     break;
-	case GRAVITATION_FACTOR  : gravitationFactor = value;   break;
-	case GRAVITATION_ANGLE   : gravitationAngle = value;    break;
-	case BODY_X              : mouseBody->x = value;        break;
-	case BODY_Y              : mouseBody->y = value;        break;
-	case BODY_Z              : mouseBody->z = value;        break;
-	case BODY_WEIGHT         : mouseBody->weight = value;   break;
-	case BODY_RADIUS         : mouseBody->radius = value;   break;
-	case PIXEL_INTENSITY     : pixelIntensity = value;      break;
-	case TIME_FACTOR         : timeFactor = value;          break;
+	case PARTICLE_DAMPING     : particleDamping = value;     break;
+	case GRAVITATION_FACTOR   : gravitationFactor = value;   break;
+	case GRAVITATION_CYLINDER : gravitationCylinder = value; break;
+	case GRAVITATION_ANGLE    : gravitationAngle = value;    break;
+	case BODY_X               : mouseBody->x = value;        break;
+	case BODY_Y               : mouseBody->y = value;        break;
+	case BODY_Z               : mouseBody->z = value;        break;
+	case BODY_YAW             : mouseBody->yaw = value;      break;
+	case BODY_PITCH           : mouseBody->pitch = value;    break;
+	case BODY_ROLL            : mouseBody->roll = value;     break;
+	case BODY_WEIGHT          : mouseBody->weight = value;   break;
+	case BODY_RADIUS          : mouseBody->radius = value;   break;
+	case PIXEL_INTENSITY      : pixelIntensity = value;      break;
+	case TIME_FACTOR          : timeFactor = value;          break;
 	}
 
 	if (write && recordParameters) {

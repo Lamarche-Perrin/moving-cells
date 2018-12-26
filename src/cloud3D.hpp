@@ -37,7 +37,7 @@
 #include <SDL.h>
 #include <opencv2/opencv.hpp>
 
-#define VERBOSE 1
+#define VERBOSE 0
 #define MILLION 1000000L
 #define BILLION 1000000000L
 #define PI 3.14159265
@@ -59,26 +59,32 @@
 // PARAMETER METHODS
 
 #define GRAVITATION_FACTOR    0
-#define GRAVITATION_ANGLE     1
+#define GRAVITATION_CYLINDER  1
+#define GRAVITATION_ANGLE     2
 
-#define PARTICLE_DAMPING      2
+#define PARTICLE_DAMPING      3
 
-#define BODY_X                3
-#define BODY_Y                4
-#define BODY_Z                5
-#define BODY_WEIGHT           6
-#define BODY_RADIUS           7
+#define BODY_X                4
+#define BODY_Y                5
+#define BODY_Z                6
 
-#define PIXEL_INTENSITY       8
-#define TIME_FACTOR           9
+#define BODY_YAW              7
+#define BODY_PITCH            8
+#define BODY_ROLL             9
 
-#define PARAMETER_NUMBER     10
+#define BODY_WEIGHT          10
+#define BODY_RADIUS          11
+
+#define PIXEL_INTENSITY      12
+#define TIME_FACTOR          13
+
+#define PARAMETER_NUMBER     14
 
 
 // CLASS PREDIFINITIONS
 
 class Cloud;
-class Body;
+struct Body;
 typedef std::vector<Body*> BodyList;
 
 struct ArgStruct {
@@ -264,11 +270,15 @@ public:
 	int id;
 	float x, y, z;
 	int rX, rY;
-	float weight;
-	float radius;
 
-    Body () : id (-1), x (0), y (0), z (0), rX (0), rY (0), weight (0), radius (0) {};
-    Body (float vX, float vY, float vZ, float vWeight) : id (-1), x (vX), y (vY), z (vZ), rX (0), rY (0), weight (vWeight), radius (0) {};
+	float yaw, pitch, roll;
+	float rYaw, rPitch, rRoll;
+	float rotationMatrix [3][3];
+
+	float weight, radius;
+
+    Body () : id (-1), x (0), y (0), z (0), rX (0), rY (0), yaw (0), pitch (0), roll (0), weight (0), radius (0) {};
+    Body (float vX, float vY, float vZ, float vWeight) : id (-1), x (vX), y (vY), z (vZ), rX (0), rY (0), yaw (0), pitch (0), roll (0), weight (vWeight), radius (0) {};
 };
 
 
@@ -328,6 +338,7 @@ public:
 
 	float gravitationFactor   = 0.;
 	float gravitationAngle    = 0.;
+	float gravitationCylinder = 0.;
 	float timeFactor          = 1.;
 
 	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;

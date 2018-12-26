@@ -6,7 +6,7 @@ list (APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 
 set (CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} $ENV{HOME}/programming/lib/freenect2/lib/cmake/freenect2)
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set (CMAKE_CXX_FLAGS "-O3 -std=c++11")
+set (CMAKE_CXX_FLAGS "-O3 -Wall -std=c++11")
 set (OpenCV_DIR "/usr/local/include/opencv")
 
 find_package (OpenCV REQUIRED COMPONENTS core imgproc highgui calib3d)
