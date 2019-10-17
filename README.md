@@ -6,21 +6,46 @@ The current version of the program is implemented on Kinect for Windows v2 (K4W2
 
 ## Installation on Linux
 
-* Install [libreenect2](https://github.com/OpenKinect/libfreenect2).
+* Clone the project:
+```
+git clone https://github.com/Lamarche-Perrin/moving-cells
+```
 
 * Install OpenCV:
 ```
 sudo apt-get install libopencv-dev
 ```
 
+* Install SDL 2:
+```
+sudo apt-get install libsdl2-dev
+```
+
+
+### Static Cells (without Kinect)
+
+* Compile the files:
+```
+cd moving_cells
+mkdir build
+cd build
+cmake .. -DBUILD_ALL=OFF
+make
+```
+
+* Run the programs:
+```
+./bin/static-cells
+./bin/time-delays
+```
+
+### All including Moving Cells (with Kinect)
+
+* Install [libreenect2](https://github.com/OpenKinect/libfreenect2).
+
 * Install OpenAL and libsndfile:
 ```
 sudo apt-get install libopenal-dev libalut-dev libsndfile1-dev
-```
-
-* Clone the project:
-```
-git clone https://github.com/Lamarche-Perrin/moving-cells
 ```
 
 * Compile the files:
@@ -28,7 +53,7 @@ git clone https://github.com/Lamarche-Perrin/moving-cells
 cd moving_cells
 mkdir build
 cd build
-cmake ..
+cmake .. -DBUILD_ALL=ON
 make
 ```
 
@@ -37,11 +62,36 @@ Note that you might need to adjust `CMAKE_PREFIX_PATH` in `CMakeLists.txt` to fi
 * Run the programs:
 ```
 ./bin/moving-cells
-./bin/static-cells
 ./bin/singing-cells
-./bin/time-delays
 ./bin/time-ghosts
 ```
+
+## Static Cells
+
+Run the program with
+```
+./bin/static-cells
+```
+
+### Control during execution
+
+* Use mouse to control the position of the gravity center (little pale-blue dot)
+* `Left click` to set the weight of the gravity center to 1 (or to set it back to 0)
+* `Right click` to set the weight of the gravity center to 2 (or to set it back to 0)
+<br/><br/>
+
+* `<Enter>` to uniformly dispatch the particles on the screen
+* `<Backspace>` to randomly dispatch the particles on the screen
+<br/><br/>
+
+* `<Keypad Enter>` to show (or hide) the current values of the parameters
+* `<KEY> + <Keypad +>` to *increase* the value of the parameter identified with letter `<KEY>`
+* `<KEY> + <Keypad ->` to *decrease* the value of the parameter identified with letter `<KEY>`
+* `<KEY> + <Keypad 0>` to *re-initialise* the value of the parameter identified with letter `<KEY>`
+<br/><br/>
+
+* `<Escape>` to close the application
+
 
 ## Time Delays
 
