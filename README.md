@@ -22,7 +22,7 @@ sudo apt-get install libsdl2-dev
 ```
 
 
-### Static Cells (without Kinect)
+### Only install Static Cells and Time Delays (without Kinect)
 
 * Compile the files:
 ```
@@ -39,7 +39,10 @@ make
 ./bin/time-delays
 ```
 
-### All including Moving Cells (with Kinect)
+See below how to control these programs during execution.
+
+
+### Install everything, including Moving Cells and Time Ghosts (with Kinect)
 
 * Install [libreenect2](https://github.com/OpenKinect/libfreenect2).
 
