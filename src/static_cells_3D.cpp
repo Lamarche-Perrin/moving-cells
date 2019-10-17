@@ -29,7 +29,7 @@
  */
 
 
-#include "cloud.hpp"
+#include "cloud3D.hpp"
 
 
 int main (int argc, char *argv[])
@@ -37,6 +37,16 @@ int main (int argc, char *argv[])
 	srand (time (NULL));
 
 	Cloud *cloud = new Cloud ();
+
+	cloud->cloudWidth = 16./10;
+	cloud->cloudHeight = 9./10;
+	cloud->cloudDepth = 16./10;
+	cloud->particleNumber = 2304 * 64;
+	
+	cloud->graphicsWidth  = 1920;
+	cloud->graphicsHeight = 1080;
+
+	//cloud->addBody (new Body (8, 4.5, 8, 10));
 	cloud->init();
 
 	pthread_t cloudThread;

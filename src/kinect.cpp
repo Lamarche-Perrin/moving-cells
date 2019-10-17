@@ -701,7 +701,7 @@ void Kinect::displaySensor (cv::Mat *depthFrame)
 		}
 	}
 
-	cv::resize (*depthFrame, *depthFrame, cv::Size(), 2, 2); 
+	//cv::resize (*depthFrame, *depthFrame, cv::Size(), 2, 2); 
 	cv::imshow ("depth", *depthFrame / 4500.);
 	//cv::resizeWindow ("depth", );
 }

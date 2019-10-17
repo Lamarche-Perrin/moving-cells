@@ -1,0 +1,82 @@
+cmake_minimum_required (VERSION 2.8 FATAL_ERROR)
+
+project ("Moving Cells")
+
+list (APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
+
+#set (CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} $ENV{HOME}/programming/lib/freenect2/lib/cmake/freenect2)
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set (CMAKE_CXX_FLAGS "-O3 -Wall -std=c++11")
+set (OpenCV_DIR "/usr/local/include/opencv")
+
+find_package (OpenCV REQUIRED COMPONENTS core imgproc highgui calib3d)
+if (OpenCV_FOUND)
+  message (STATUS "Found OpenCV")
+else ()
+  message (STATUS "OpenCV not found!")  
+endif ()
+
+#find_package (OpenAL REQUIRED)
+#if (OpenAL_FOUND)
+#  message (STATUS "Found OpenAL")
+#else ()
+#  message (STATUS "OpenAL not found!")  
+#endif ()
+
+find_package (SDL2 REQUIRED)
+if (SDL2_FOUND)
+  message (STATUS "Found SDL2")
+  string (STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
+else ()
+  message (STATUS "SDL2 not found!")  
+endif ()
+
+#find_package (LibSndFile REQUIRED)
+
+#find_package (LibSndFile)
+#if (LibSndFile_FOUND)
+#  message (STATUS "Found LibSndFile")
+#else ()
+#  message (STATUS "LibSndFile not found!")  
+#endif ()
+
+#find_package (freenect2 REQUIRED COMPONENTS registration)
+#if (freenect2_FOUND)
+#  message (STATUS "Found freenect2")
+#else ()
+#  message (STATUS "freenect2 not found!")  
+#endif ()
+
+find_package (Threads REQUIRED)
+if (Threads_FOUND)
+  message (STATUS "Found Threads")
+else ()
+  message (STATUS "Threads not found!")  
+endif ()
+
+
+include_directories (${OpenCV_INCLUDE_DIRS})
+#include_directories (${OPENAL_INCLUDE_DIR})
+include_directories (${SDL2_INCLUDE_DIRS})
+#include_directories (${freenect2_INCLUDE_DIR})
+#include_directories (${LIBSNDFILE_INCLUDE_DIRS})
+#include_directories ("/usr/include/libusb-1.0/")
+
+add_executable (static-cells ./src/static_cells.cpp ./src/cloud.cpp)
+#add_executable (static-cells-3D ./src/static_cells_3D.cpp ./src/cloud3D.cpp)
+#add_executable (setup-kinect ./src/setup_kinect.cpp ./src/kinect.cpp)
+#add_executable (moving-cells ./src/moving_cells.cpp ./src/cloud.cpp ./src/kinect.cpp)
+#add_executable (singing-cells ./src/singing_cells.cpp)
+#add_executable (time-delays ./src/time_delays.cpp)
+#add_executable (time-ghosts ./src/time_ghosts.cpp)
+#add_executable (my-test ./src/test.cpp)
+
+target_link_libraries (static-cells ${CMAKE_THREAD_LIBS_INIT} ${OpenCV_LIBS} ${SDL2_LIBRARIES})
+#target_link_libraries (static-cells-3D ${CMAKE_THREAD_LIBS_INIT} ${OpenCV_LIBS} ${SDL2_LIBRARIES})
+#target_link_libraries (setup-kinect ${CMAKE_THREAD_LIBS_INIT} ${OpenCV_LIBS} ${freenect2_LIBRARIES})
+#target_link_libraries (moving-cells ${CMAKE_THREAD_LIBS_INIT} ${OpenCV_LIBS} ${SDL2_LIBRARIES} ${freenect2_LIBRARIES})
+#target_link_libraries (singing-cells ${CMAKE_THREAD_LIBS_INIT} ${OpenCV_LIBS} ${OPENAL_LIBRARY} ${LIBSNDFILE_LIBRARIES})
+#target_link_libraries (time-delays ${CMAKE_THREAD_LIBS_INIT} ${OpenCV_LIBS})
+#target_link_libraries (time-ghosts ${freenect2_LIBRARIES} ${OpenCV_LIBS})
+#target_link_libraries (my-test)
+

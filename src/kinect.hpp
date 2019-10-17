@@ -106,7 +106,7 @@ class Kinect
 {
 public:
 	float thresholdAdd = 100;
-	int objectMinSize = 1000;
+	int objectMinSize = 5000;
 	bool reverseXAxis = false;
 	bool reverseYAxis = true;
 

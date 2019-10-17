@@ -348,7 +348,9 @@ public:
 	float particleRatioMoy    = 0.5;
 	float particleRatioMax    = 1000.;
 
+	int pixelResolution       = 1;
 	float pixelIntensity      = 1.;
+	float pixelCleaningRate   = 0.;
 
 // PROGRAM PARAMETERS
 	static const int maxParticleNumber   = 1920 * 1080 * 4;
@@ -396,6 +398,8 @@ public:
 	// float rBodyWeight;
 	float rParticleDamping;
 	float rPixelSize;
+	float rPixelDrawingRate;
+	float rPixelCleaningRate;
 	float rWidthBorder;
 	float rWidthBorderDoubled;
 	float rHeightBorder;
@@ -403,7 +407,7 @@ public:
 
 // PARTICLE VARIABLES
 	Particle *particles;
-	int *pixels;
+	float *pixels;
 	cv::Mat *frame;
 	cv::Mat finalFrame;
 	int frameIndex;
@@ -462,6 +466,9 @@ public:
 
 	static void *updateAndMoveParticles (void *args);
 	void updateAndMoveParticles (int id);
+
+	static void *cleanPixels (void *args);
+	void cleanPixels (int id);
 
 	static void *clearPixels (void *args);
 	void clearPixels (int id);

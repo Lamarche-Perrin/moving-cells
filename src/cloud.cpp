@@ -131,9 +131,9 @@ void Cloud::setup ()
 	particles = new Particle [maxParticleNumber];
 	initParticles (particleInitMode);
 
-	particleRedArray = new int [maxParticleNumber+1];
-	particleBlueArray = new int [maxParticleNumber+1];
-	particleGreenArray = new int [maxParticleNumber+1];
+	particleRedArray = new int [maxParticleNumber * pixelResolution + 1];
+	particleBlueArray = new int [maxParticleNumber * pixelResolution + 1];
+	particleGreenArray = new int [maxParticleNumber * pixelResolution + 1];
 
 	setupColor ();
 
@@ -158,7 +158,7 @@ void Cloud::setup ()
 	}
 		  
 	frame = new cv::Mat (graphicsHeight, graphicsWidth, CV_8UC3);
-	pixels = new int [graphicsWidth*graphicsHeight];
+	pixels = new float [graphicsWidth*graphicsHeight];
 
 	// SETUP THREADS
 	setupThreads();
@@ -233,9 +233,9 @@ void Cloud::setupColor ()
 	float bB = (particleColorMoy.b - particleColorMin.b) / (particleRatioMoy - particleRatioMin) - aB * (particleRatioMin + particleRatioMoy);
 	float cB = particleColorMin.b - aB * pow (particleRatioMin, 2) - bB * particleRatioMin;
 
-	for (int number = 0; number <= particleNumber; number++)
+	for (int number = 0; number <= particleNumber * pixelResolution; number++)
 	{
-		float particleRatio = (float) number / particleNumber * pixelNumber;
+		float particleRatio = (float) number / (particleNumber * pixelResolution) * pixelNumber;
 
 		if (particleRatio <= particleRatioMin) {
 			particleRedArray[number] = particleColorMin.r;
@@ -390,6 +390,14 @@ void Cloud::updatePhysics ()
 	rDistance = sqrt (pixelNumber);
 
 	rPixelSize = 1 / rDistance;
+	if (pixelCleaningRate > 0) {
+		rPixelCleaningRate = exp (- rDelay * log(2) / pixelCleaningRate);
+		rPixelDrawingRate = 1 - rPixelCleaningRate;
+	} else {
+		rPixelCleaningRate = 1;
+		rPixelDrawingRate = 1;
+	}
+	
 	rWidthBorder = graphicsWidth / rDistance;
 	rWidthBorderDoubled = rWidthBorder * 2;
 	rHeightBorder = graphicsHeight / rDistance;
@@ -412,29 +420,56 @@ void Cloud::computeParticles ()
 {
 	ArgStruct **args = new ArgStruct *[threadNumber];
 
-	// CLEAR PIXELS
+	// CLEAN OR CLEAR PIXELS
+	if (pixelCleaningRate == 0) {
 #if VERBOSE
-	std::cout << "BEGIN clear pixels" << std::endl;
+		std::cout << "BEGIN clear pixels" << std::endl;
 #endif
 	
-	for (int i = 0; i < threadNumber; i++)
-	{
-		args[i] = new ArgStruct (this, i);
-		int rc = pthread_create (&threads[i], NULL, &Cloud::clearPixels, (void *) args[i]);
-		if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
+		for (int i = 0; i < threadNumber; i++)
+		{
+			args[i] = new ArgStruct (this, i);
+			int rc = pthread_create (&threads[i], NULL, &Cloud::clearPixels, (void *) args[i]);
+			if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
+		}
+
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_join (threads[i], &status);
+			if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
+			delete args[i];
+		}
+
+#if VERBOSE
+		std::cout << "-> END clear pixels" << std::endl;
+#endif
 	}
 
-	for (int i = 0; i < threadNumber; i++)
-	{
-		int rc = pthread_join (threads[i], &status);
-		if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
-		delete args[i];
-	}
+	else {
+#if VERBOSE
+		std::cout << "BEGIN clean pixels" << std::endl;
+#endif
+	
+		for (int i = 0; i < threadNumber; i++)
+		{
+			args[i] = new ArgStruct (this, i);
+			int rc = pthread_create (&threads[i], NULL, &Cloud::cleanPixels, (void *) args[i]);
+			if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
+		}
 
+		for (int i = 0; i < threadNumber; i++)
+		{
+			int rc = pthread_join (threads[i], &status);
+			if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
+			delete args[i];
+		}
+	}
+	
 #if VERBOSE
 	std::cout << "-> END clear pixels" << std::endl;
 #endif
 
+	// MOVE PARTICLES
 #if VERBOSE
 	std::cout << "BEGIN move particles" << std::endl;
 #endif
@@ -960,13 +995,13 @@ void Cloud::updateAndMoveParticles (int id)
 
 			int rX = particle->x * rDistance;
 			int rY = particle->y * rDistance;
-			pixels [rX + rY * graphicsWidth]++;
+			pixels [rX + rY * graphicsWidth] += rPixelDrawingRate;
 		}
 
 		else {
 			int rX = particle->x * rDistance;
 			int rY = particle->y * rDistance;
-			if (rX >= 0 && rX < graphicsWidth && rY >= 0 && rY < graphicsHeight) { pixels [rX + rY * graphicsWidth]++; }
+			if (rX >= 0 && rX < graphicsWidth && rY >= 0 && rY < graphicsHeight) { pixels [rX + rY * graphicsWidth] += rPixelDrawingRate; }
 		}
 
 	}
@@ -987,6 +1022,22 @@ void Cloud::clearPixels (int id)
 }
 
 
+void *Cloud::cleanPixels (void *args)
+{
+	ArgStruct *argStruct = (ArgStruct *) args;
+	reinterpret_cast<Cloud*>(argStruct->cloud)->cleanPixels (argStruct->id);
+	pthread_exit (NULL);
+}
+
+void Cloud::cleanPixels (int id)
+{
+	for (int i = firstPixel[id]; i < lastPixel[id]; i++) { pixels[i] = pixels[i] * rPixelCleaningRate; }
+}
+
+
+
+
+
 void *Cloud::applyPixels (void *args)
 {
 	ArgStruct *argStruct = (ArgStruct *) args;
@@ -999,7 +1050,7 @@ void Cloud::applyPixels (int id)
 	uchar *pixel = frame->ptr<uchar>(0);
 	for (int i = firstPixel[id]; i < lastPixel[id]; i++)
 	{
-		int c = pixels[i];
+		int c = pixels[i] * pixelResolution;
 		int i3 = i*3;
 		pixel[i3] = particleBlueArray[c] * pixelIntensity;
 		pixel[i3+1] = particleGreenArray[c] * pixelIntensity;

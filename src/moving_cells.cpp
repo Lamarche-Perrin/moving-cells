@@ -39,21 +39,22 @@ int main (int argc, char *argv[])
 	srand (time (NULL));
 
 	Kinect *kinect = new Kinect ();
-	kinect->graphicsWidth  = 1280;
-	kinect->graphicsHeight = 720;
+	kinect->graphicsWidth  = 1024;
+	kinect->graphicsHeight = 768;
 
-	kinect->xMin = -1.8;
-	kinect->yMin =  1.8;
-	kinect->zMin =  2.0;
-	kinect->zMax =  4.2;
-	kinect->rMin =  0.30;
+	kinect->distanceMax = 2400;
+	kinect->xMin = -1.4;
+	kinect->yMin =  1.4;
+	kinect->zMin =  1.2;
+	kinect->zMax =  2.4;
+	kinect->rMin =  0.35;
 	kinect->rMoy =  0.65;
-	kinect->rMax =  0.95;
+	kinect->rMax =  0.85;
 
-	kinect->weightMin = -0.5;
+	kinect->weightMin = -0.2;
 	kinect->weightMax =  1.0;
 
-	kinect->thresholdFromFile = false;
+	kinect->thresholdFromFile = true;
 	kinect->allowSensorDisplay = false;
 	kinect->waitingTime = 100000;
 	kinect->init();
@@ -63,10 +64,10 @@ int main (int argc, char *argv[])
 	if (rcKinect) { std::cout << "Error: Unable to create thread " << rcKinect << std::endl; exit (-1); }
 
 	Cloud *cloud = new Cloud ();
-	cloud->graphicsWidth  = 1280;
-	cloud->graphicsHeight = 720;
+	cloud->graphicsWidth  = 1024;
+	cloud->graphicsHeight = 768;
 	
-	cloud->particleNumber = 1280 * 720 / 6;
+	cloud->particleNumber = 1024 * 768 / 3;
 	cloud->displayBodies  = false;
 	cloud->particleDamping = 0.5;
 	cloud->init();
