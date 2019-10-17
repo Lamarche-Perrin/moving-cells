@@ -69,7 +69,7 @@ Note that you might need to adjust `CMAKE_PREFIX_PATH` in `CMakeLists.txt` to fi
 ./bin/time-ghosts
 ```
 
-## Static Cells
+## How to use Static Cells
 
 Run the program with
 ```
@@ -96,7 +96,7 @@ Run the program with
 * `<Escape>` to close the application
 
 
-## Time Delays
+## How to use Time Delays
 
 Run the program with
 ```
