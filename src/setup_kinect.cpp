@@ -32,7 +32,6 @@
 
 #include "kinect.hpp"
 
-
 int main (int argc, char *argv[])
 {
 	srand (time (NULL));
@@ -54,6 +53,8 @@ int main (int argc, char *argv[])
 
 	kinect->thresholdFromFile = false;
 	kinect->allowSensorDisplay = true;
+	kinect->allowObjectDetection = true;
+	kinect->allowPointExtraction = false;
 	kinect->waitingTime = 10000;
 	kinect->init();
 	

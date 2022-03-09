@@ -156,12 +156,9 @@ void Cloud::setup ()
       }
     }
   }
-		  
-  frame = new cv::Mat (graphicsHeight, graphicsWidth, CV_8UC3);
-  pixels = new float [graphicsWidth*graphicsHeight];
-
-  // SETUP THREADS
-  setupThreads();
+  
+  // SETUP GPU
+  setupGPU();
 
   // SETUP TIME
   frameNb = 0;
@@ -192,30 +189,25 @@ void Cloud::setdown ()
 }
 
 
-void Cloud::setupThreads ()
+void Cloud::setupGPU ()
 {
-  pthread_attr_init (&attr);
-  pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_JOINABLE);
+  for (const auto &device : cl::system::devices()) { std::cout << device.name() << std::endl; GPU_device = device; }
+  GPU_device = cl::system::default_device();
+  std::cout << "selected device: " << GPU_device.name() << std::endl;
 
-  int particlePerThread = particleNumber / threadNumber;
-  int currentParticle = 0;
-  for (int i = 0; i < threadNumber; i++)
-    {
-      firstParticle[i] = currentParticle;
-      currentParticle += particlePerThread;
-      lastParticle[i] = currentParticle;
-    }
-  lastParticle[threadNumber-1] = particleNumber;
+  GPU_context = cl::context (GPU_device);
+  GPU_queue = cl::command_queue (GPU_context, GPU_device);
 
-  int pixelPerThread = pixelNumber / threadNumber;
-  int currentPixel = 0;
-  for (int i = 0; i < threadNumber; i++)
-    {
-      firstPixel[i] = currentPixel;
-      currentPixel += pixelPerThread;
-      lastPixel[i] = currentPixel;
-    }
-  lastPixel[threadNumber-1] = pixelNumber;
+  GPU_particles = cl::vector <cl::float4_> (particleNumber, GPU_context);
+  GPU_particlesNew = cl::vector <cl::float4_> (particleNumber, GPU_context);
+
+  pixels = new cv::Mat (graphicsHeight, graphicsWidth, CV_32FC1, cv::Scalar (0));
+  GPU_pixels = cl::image2d (GPU_context, graphicsWidth, graphicsHeight, rFloat, cl::image2d::read_write);
+  GPU_queue.enqueue_write_image (GPU_pixels, GPU_pixels.origin(), GPU_pixels.size(), pixels.data);
+
+  frame = new cv::Mat (graphicsHeight, graphicsWidth, CV_8UC4, cv::Scalar (1,1,1));
+  GPU_frame = cl::image2d (GPU_context, graphicsWidth, graphicsHeight, bgraInt8, cl::image2d::read_write);
+  GPU_queue.enqueue_write_image (GPU_frame, GPU_frame.origin(), GPU_frame.size(), frame.data);
 }
 
 
@@ -366,7 +358,34 @@ void Cloud::initParticles (int type)
 	}
       }
       break;
-    }	
+    }
+
+  particlesToGPU();
+}
+
+
+void Cloud::particlesToGPU ()
+{
+  float *particlesTemp = new float [particleNumber * 4];
+
+  int k = 0;
+  for (int i = 0; i < particleNumber; i++)
+    {
+      Particle *particle = &particles[i];
+      particlesTemp[k++] = particle->x;
+      particlesTemp[k++] = particle->y;
+      particlesTemp[k++] = particle->dx;
+      particlesTemp[k++] = particle->dy;
+    }
+  
+  cl::copy (
+	    reinterpret_cast <cl::float4_*> (particlesTemp),
+	    reinterpret_cast <cl::float4_*> (particlesTemp) + particleNumber,
+	    GPU_particles.begin(),
+	    GPU_queue
+	    );
+
+  delete [] particlesTemp;
 }
 
 
@@ -389,7 +408,6 @@ void Cloud::updatePhysics ()
   rDelay = delay * timeFactor;
   rDistance = sqrt (pixelNumber);
 
-  rPixelSize = 1 / rDistance;
   if (pixelCleaningRate > 0) {
     rPixelCleaningRate = exp (- rDelay * log(2) / pixelCleaningRate);
     rPixelDrawingRate = 1 - rPixelCleaningRate;
@@ -397,11 +415,6 @@ void Cloud::updatePhysics ()
     rPixelCleaningRate = 1;
     rPixelDrawingRate = 1;
   }
-	
-  rWidthBorder = graphicsWidth / rDistance;
-  rWidthBorderDoubled = rWidthBorder * 2;
-  rHeightBorder = graphicsHeight / rDistance;
-  rHeightBorderDoubled = rHeightBorder * 2;
 	
   rGravitationFactor = gravitationFactor / 2;
   rGravitationAngle = gravitationAngle * PI / 180;
@@ -419,26 +432,18 @@ void Cloud::updatePhysics ()
 void Cloud::computeParticles ()
 {
   ArgStruct **args = new ArgStruct *[threadNumber];
+  size_t origin [2] = {0, 0};
+  size_t region [2] = {graphicsWidth, graphicsHeight};
 
   // CLEAN OR CLEAR PIXELS
   if (pixelCleaningRate == 0) {
 #if VERBOSE
     std::cout << "BEGIN clear pixels" << std::endl;
 #endif
-	
-    for (int i = 0; i < threadNumber; i++)
-      {
-	args[i] = new ArgStruct (this, i);
-	int rc = pthread_create (&threads[i], NULL, &Cloud::clearPixels, (void *) args[i]);
-	if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
-      }
 
-    for (int i = 0; i < threadNumber; i++)
-      {
-	int rc = pthread_join (threads[i], &status);
-	if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
-	delete args[i];
-      }
+    cl::kernel GPU_clearPixels_kernel (GPU_clearPixels_program, "GPU_clearPixels_kernel");
+    GPU_clearPixels_kernel.set_arg (0, GPU_frame);
+    GPU_queue.enqueue_nd_range_kernel (GPU_clearPixels_kernel, 2, origin, region, 0);
 
 #if VERBOSE
     std::cout << "-> END clear pixels" << std::endl;
@@ -450,23 +455,25 @@ void Cloud::computeParticles ()
     std::cout << "BEGIN clean pixels" << std::endl;
 #endif
 	
-    for (int i = 0; i < threadNumber; i++)
-      {
-	args[i] = new ArgStruct (this, i);
-	int rc = pthread_create (&threads[i], NULL, &Cloud::cleanPixels, (void *) args[i]);
-	if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
-      }
-
-    for (int i = 0; i < threadNumber; i++)
-      {
-	int rc = pthread_join (threads[i], &status);
-	if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
-	delete args[i];
-      }
-  }
+    cl::kernel GPU_cleanPixels_kernel (GPU_cleanPixels_program, "GPU_cleanPixels_kernel");
+    GPU_cleanPixels_kernel.set_arg (0, GPU_frame);
+    GPU_queue.enqueue_nd_range_kernel (GPU_cleanPixels_kernel, 2, origin, region, 0);
 	
 #if VERBOSE
   std::cout << "-> END clear pixels" << std::endl;
+#endif
+
+  // UPDATE PARTICLES
+#if VERBOSE
+  std::cout << "BEGIN update particles" << std::endl;
+#endif
+
+  cl::kernel GPU_clearPixels_kernel (GPU_updateParticles_program, "GPU_updateParticles_kernel");
+  GPU_updateParticles_kernel.set_arg (0, GPU_particles);
+  GPU_queue.enqueue_1d_range_kernel (GPU_updateParticles_kernel, 0, particleNumber, 0);
+	
+#if VERBOSE
+  std::cout << "-> END update particles" << std::endl;
 #endif
 
   // MOVE PARTICLES
@@ -474,22 +481,25 @@ void Cloud::computeParticles ()
   std::cout << "BEGIN move particles" << std::endl;
 #endif
 
-  for (int i = 0; i < threadNumber; i++)
-    {
-      args[i] = new ArgStruct (this, i);
-      int rc = pthread_create (&threads[i], NULL, &Cloud::updateAndMoveParticles, (void *) args[i]);
-      if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
-    }
-
-  for (int i = 0; i < threadNumber; i++)
-    {
-      int rc = pthread_join (threads[i], &status);
-      if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
-      delete args[i];
-    }		
+  cl::kernel GPU_clearPixels_kernel (GPU_moveParticles_program, "GPU_moveParticles_kernel");
+  GPU_moveParticles_kernel.set_arg (0, GPU_particles);
+  GPU_queue.enqueue_1d_range_kernel (GPU_moveParticles_kernel, 0, particleNumber, 0);
 	
 #if VERBOSE
   std::cout << "-> END move particles" << std::endl;
+#endif
+
+  // APPLY PARTICLES
+#if VERBOSE
+  std::cout << "BEGIN apply particles" << std::endl;
+#endif
+
+  cl::kernel GPU_clearPixels_kernel (GPU_applyParticles_program, "GPU_applyParticles_kernel");
+  GPU_applyParticles_kernel.set_arg (0, GPU_particles);
+  GPU_queue.enqueue_1d_range_kernel (GPU_applyParticles_kernel, 0, particleNumber, 0);
+	
+#if VERBOSE
+  std::cout << "-> END apply particles" << std::endl;
 #endif
 
   // APPLY PIXELS TO FRAME
@@ -497,19 +507,9 @@ void Cloud::computeParticles ()
   std::cout << "BEGIN apply pixels" << std::endl;
 #endif
 
-  for (int i = 0; i < threadNumber; i++)
-    {
-      args[i] = new ArgStruct (this, i);
-      int rc = pthread_create (&threads[i], NULL, &Cloud::applyPixels, (void *) args[i]);
-      if (rc) { std::cout << "Error: Unable to create thread " << rc << std::endl; exit(-1); }
-    }
-
-  for (int i = 0; i < threadNumber; i++)
-    {
-      int rc = pthread_join (threads[i], &status);
-      if (rc) { std::cout << "Error: Unable to join thread " << rc << std::endl; exit(-1); }
-      delete args[i];
-    }
+  cl::kernel GPU_clearPixels_kernel (GPU_applyPixels_program, "GPU_applyPixels_kernel");
+  GPU_applyPixels_kernel.set_arg (0, GPU_particles);
+  GPU_queue.enqueue_1d_range_kernel (GPU_applyPixels_kernel, 0, particleNumber, 0);
 
 #if VERBOSE
   std::cout << "-> END apply pixels" << std::endl;
@@ -937,84 +937,153 @@ void Cloud::readParticlePositions (std::string filename)
 }
 
 
-void *Cloud::updateAndMoveParticles (void *args)
+void Cloud::updateParticles ()
 {
-  ArgStruct *argStruct = (ArgStruct *) args;
-  reinterpret_cast<Cloud*>(argStruct->cloud)->updateAndMoveParticles (argStruct->id);
-  pthread_exit (NULL);
-}
-
-
-void Cloud::updateAndMoveParticles (int id)
-{
-  for (int i = firstParticle[id]; i < lastParticle[id]; i++) {
-
-    Particle *particle = &particles[i];
+  const char GPU_updateParticles_source [] = BOOST_COMPUTE_STRINGIZE_SOURCE
+    (
+     __kernel void GPU_updateParticles_kernel
+     (
+      __global float4 *particlesInOut,
+      float weight,
+      float x,
+      float y,
+      float rGravitationFactor,
+      float rGravitationAngle,
+      float rDelay
+      )
+     {
+       const uint i = get_global_id (0);
+       float4 p = particlesInOut[i];
 		
-    // Compute motion
-    float ddx = - rParticleDamping * particle->dx;
-    float ddy = - rParticleDamping * particle->dy;
+       // Compute motion
+       float ddx = 0;
+       float ddy = 0;
 
-    for (unsigned int j = 0; j < bodyList->size(); j++) {
-      Body *body = bodyList->at(j);
-      if (body->weight == 0) continue;
+       if (weight == 0) continue;
 
-      float distanceX = particle->x - body->x;
-      float distanceY = particle->y - body->y;
+       float distanceX = p.x - x;
+       float distanceY = p.y - y;
 	
-      float factor = pow (pow (distanceX, 2) + pow (distanceY, 2), rGravitationFactor);
-      if (factor == 0) continue;
-			
-      float angle = atan2 (distanceY, distanceX);
-      ddx -= body->weight * cos (angle + rGravitationAngle) / factor;
-      ddy -= body->weight * sin (angle + rGravitationAngle) / factor;
-    }
+       float factor = pow (pow (distanceX, 2) + pow (distanceY, 2), rGravitationFactor);
+       if (factor == 0) continue;
+       
+       float angle = atan2 (distanceY, distanceX);
+       ddx -= weight * cos (angle + rGravitationAngle) / factor;
+       ddy -= weight * sin (angle + rGravitationAngle) / factor;
+     
+       // Apply motion
+       p.z += ddx * rDelay;
+       p.w += ddy * rDelay;
 
-    // Apply motion
-    particle->dx += ddx * rDelay;
-    particle->dy += ddy * rDelay;
+       particlesInOut[i] = p;
+     }
+     );
 
-    if (particle->dx > maxParticleSpeed) { particle->dx = maxParticleSpeed; }
-    if (particle->dx < -maxParticleSpeed) { particle->dx = -maxParticleSpeed; }
-    if (particle->dy > maxParticleSpeed) { particle->dy = maxParticleSpeed; }
-    if (particle->dy < -maxParticleSpeed) { particle->dy = -maxParticleSpeed; }
-		
-    particle->x += (particle->dx - ddx * rDelay / 2) * rDelay;
-    particle->y += (particle->dy - ddy * rDelay / 2) * rDelay;
-
-    if (borderMode == MIRROR_BORDERS) {
-      while (particle->x < 0 || particle->x >= rWidthBorder) {
-	if (particle->x < 0) { particle->x = - particle->x + rPixelSize; } else { particle->x = rWidthBorderDoubled - particle->x - rPixelSize; }
-	particle->dx = -particle->dx;
-      }
-
-      while (particle->y < 0 || particle->y >= rHeightBorder) {
-	if (particle->y < 0) { particle->y = - particle->y + rPixelSize; } else { particle->y = rHeightBorderDoubled - particle->y - rPixelSize; }
-	particle->dy = -particle->dy;
-      }
-
-      int rX = particle->x * rDistance;
-      int rY = particle->y * rDistance;
-      pixels [rX + rY * graphicsWidth] += rPixelDrawingRate;
-    }
-
-    else {
-      int rX = particle->x * rDistance;
-      int rY = particle->y * rDistance;
-      if (rX >= 0 && rX < graphicsWidth && rY >= 0 && rY < graphicsHeight) { pixels [rX + rY * graphicsWidth] += rPixelDrawingRate; }
-    }
-
-  }
-  pthread_exit (NULL);
+  GPU_updateParticles_program = cl::program::create_with_source (GPU_updateParticles_source, GPU_context);
+  try { GPU_updateParticles_program.build(); }
+  catch (cl::opencl_error &e) { std::cout << GPU_updateParticles_program.build_log() << std::endl; }
 }
 
-
-void *Cloud::clearPixels (void *args)
+      
+void Cloud::moveParticles ()
 {
-  ArgStruct *argStruct = (ArgStruct *) args;
-  reinterpret_cast<Cloud*>(argStruct->cloud)->clearPixels (argStruct->id);
-  pthread_exit (NULL);
+  const char GPU_moveParticles_source [] = BOOST_COMPUTE_STRINGIZE_SOURCE
+    (
+     __kernel void GPU_moveParticles_kernel
+     (
+      __global float4 *particlesInOut,
+      float weight,
+      float x,
+      float y,
+      float rParticleDamping,
+      float maxParticleSpeed,
+      int borderMode,
+      int graphicsWidth,
+      int graphicsHeight,
+      float rDistance,
+      float rDelay
+      )
+     {
+       const uint i = get_global_id (0);
+       float4 p = particlesInOut[i];
+		
+       // Compute motion
+       float ddx = - rParticleDamping * p.z;
+       float ddy = - rParticleDamping * p.w;
+       
+       // Apply motion
+       p.z += ddx * rDelay;
+       p.w += ddy * rDelay;
+
+       if (p.z > maxParticleSpeed) { p.z = maxParticleSpeed; }
+       if (p.z < -maxParticleSpeed) { p.z = -maxParticleSpeed; }
+       if (p.w > maxParticleSpeed) { p.w = maxParticleSpeed; }
+       if (p.w < -maxParticleSpeed) { p.w = -maxParticleSpeed; }
+		
+       p.x += (p.z - ddx * rDelay / 2) * rDelay;
+       p.y += (p.w - ddy * rDelay / 2) * rDelay;
+
+       float rWidthBorder = graphicsWidth / rDistance;
+       float rWidthBorderDoubled = rWidthBorder * 2;
+       float rHeightBorder = graphicsHeight / rDistance;
+       float rHeightBorderDoubled = rHeightBorder * 2;
+       float rPixelSize = 1 / rDistance;
+
+       if (borderMode == 1) {
+	 while (p.x < 0 || p.x >= rWidthBorder) {
+	   if (p.x < 0) { p.x = - p.x + rPixelSize; } else { p.x = rWidthBorderDoubled - p.x - rPixelSize; }
+	   p.z = -p.z;
+	 }
+
+	 while (p.y < 0 || p.y >= rHeightBorder) {
+	   if (p.y < 0) { p.y = - p.y + rPixelSize; } else { p.y = rHeightBorderDoubled - p.y - rPixelSize; }
+	   p.w = -p.w;
+	 }
+       }
+
+       particlesInOut[i] = p;
+     }
+     );
+
+  GPU_moveParticles_program = cl::program::create_with_source (GPU_moveParticles_source, GPU_context);
+  try { GPU_moveParticles_program.build(); }
+  catch (cl::opencl_error &e) { std::cout << GPU_moveParticles_program.build_log() << std::endl; }
 }
+
+
+void Cloud::applyParticles ()
+{
+  const char GPU_applyParticles_source [] = BOOST_COMPUTE_STRINGIZE_SOURCE
+    (
+     __kernel void GPU_applyParticles_kernel
+     (
+      __write_only image2d_t pixelsOut,
+      __global const float4 *particlesIn,
+      float rPixelDrawingRate,
+      int graphicsWidth,
+      int graphicsHeight,
+      float rDistance,
+      float rDelay
+      )
+     {
+       const uint i = get_global_id (0);
+       float4 p = particlesInOut[i];
+		
+       int rX = p.x * rDistance;
+       int rY = p.y * rDistance;
+       if (rX >= 0 && rX < graphicsWidth && rY >= 0 && rY < graphicsHeight)
+	 {
+	   write_imagef (pixelsOut, (int2) {rx, ry}, rPixelDrawingRate);
+	 }
+	   pixels [rX + rY * graphicsWidth] += rPixelDrawingRate; }
+     }
+     );
+
+  GPU_applyParticles_program = cl::program::create_with_source (GPU_applyParticles_source, GPU_context);
+  try { GPU_applyParticles_program.build(); }
+  catch (cl::opencl_error &e) { std::cout << GPU_applyParticles_program.build_log() << std::endl; }
+}
+
 
 void Cloud::clearPixels (int id)
 {
@@ -1022,28 +1091,11 @@ void Cloud::clearPixels (int id)
 }
 
 
-void *Cloud::cleanPixels (void *args)
-{
-  ArgStruct *argStruct = (ArgStruct *) args;
-  reinterpret_cast<Cloud*>(argStruct->cloud)->cleanPixels (argStruct->id);
-  pthread_exit (NULL);
-}
-
 void Cloud::cleanPixels (int id)
 {
   for (int i = firstPixel[id]; i < lastPixel[id]; i++) { pixels[i] = pixels[i] * rPixelCleaningRate; }
 }
 
-
-
-
-
-void *Cloud::applyPixels (void *args)
-{
-  ArgStruct *argStruct = (ArgStruct *) args;
-  reinterpret_cast<Cloud*>(argStruct->cloud)->applyPixels (argStruct->id);
-  pthread_exit (NULL);
-}
 
 void Cloud::applyPixels (int id)
 {

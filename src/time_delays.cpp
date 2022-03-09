@@ -131,232 +131,232 @@ void *getFrame (void *arg);
 
 
 std::string type2str (int type) {
-	std::string r;
+  std::string r;
 
-	uchar depth = type & CV_MAT_DEPTH_MASK;
-	uchar chans = 1 + (type >> CV_CN_SHIFT);
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
 
-	switch (depth) {
-    case CV_8U: r = "8U"; break;
-    case CV_8S: r = "8S"; break;
-    case CV_16U: r = "16U"; break;
-    case CV_16S: r = "16S"; break;
-    case CV_32S: r = "32S"; break;
-    case CV_32F: r = "32F"; break;
-    case CV_64F: r = "64F"; break;
-    default: r = "User"; break;
-	}
+  switch (depth) {
+  case CV_8U: r = "8U"; break;
+  case CV_8S: r = "8S"; break;
+  case CV_16U: r = "16U"; break;
+  case CV_16S: r = "16S"; break;
+  case CV_32S: r = "32S"; break;
+  case CV_32F: r = "32F"; break;
+  case CV_64F: r = "64F"; break;
+  default: r = "User"; break;
+  }
 
-	r += "C";
-	r += (chans+'0');
+  r += "C";
+  r += (chans+'0');
 
-	return r;
+  return r;
 }
 
 
 int main (int argc, char *argv[])
 {
-	if (argc > 1 && strlen (argv[1]) == 1) { camId = atoi(argv[1]); fromFile = false; }
-	if (argc > 1 && strlen (argv[1]) > 1) { inputFileName = argv[1]; fromFile = true; }
-	// if (argc > 2) { maxDelay = atoi(argv[2]); }
-	// if (argc > 3) { switchingTime = atof(argv[3]); }
+  if (argc > 1 && strlen (argv[1]) == 1) { camId = atoi(argv[1]); fromFile = false; }
+  if (argc > 1 && strlen (argv[1]) > 1) { inputFileName = argv[1]; fromFile = true; }
+  // if (argc > 2) { maxDelay = atoi(argv[2]); }
+  // if (argc > 3) { switchingTime = atof(argv[3]); }
 
-	if (fromFile) {
-		cam = cv::VideoCapture (inputFileName);
-		std::cout << "OPENING FILE " << inputFileName << std::endl;
-		if (! cam.isOpened()) std::cout << "-> FILE NOT FOUND" << std::endl;
+  if (fromFile) {
+    cam = cv::VideoCapture (inputFileName);
+    std::cout << "OPENING FILE " << inputFileName << std::endl;
+    if (! cam.isOpened()) std::cout << "-> FILE NOT FOUND" << std::endl;
 
-		frameWidth = cam.get (CV_CAP_PROP_FRAME_WIDTH);
-		frameHeight = cam.get (CV_CAP_PROP_FRAME_HEIGHT);
-	}
+    frameWidth = cam.get (cv::CAP_PROP_FRAME_WIDTH);
+    frameHeight = cam.get (cv::CAP_PROP_FRAME_HEIGHT);
+  }
 
-	else {
-		cam.open (camId);
-		std::cout << "OPENING CAM " << camId << std::endl;
-		if (! cam.isOpened()) std::cout << "-> CAN NOT FOUND" << std::endl;
+  else {
+    cam.open (camId);
+    std::cout << "OPENING CAM " << camId << std::endl;
+    if (! cam.isOpened()) std::cout << "-> CAN NOT FOUND" << std::endl;
 
-		cam.set (CV_CAP_PROP_FOURCC, CV_FOURCC('M','J','P','G'));
-		cam.set (CV_CAP_PROP_FPS, 60);
-		cam.set (CV_CAP_PROP_FRAME_WIDTH, frameWidth);
-		cam.set (CV_CAP_PROP_FRAME_HEIGHT, frameHeight);
-	}
+    cam.set (cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
+    cam.set (cv::CAP_PROP_FPS, 60);
+    cam.set (cv::CAP_PROP_FRAME_WIDTH, frameWidth);
+    cam.set (cv::CAP_PROP_FRAME_HEIGHT, frameHeight);
+  }
 
-    double fps = cam.get (CV_CAP_PROP_FPS);
-	double currentWidth = cam.get (CV_CAP_PROP_FRAME_WIDTH);
-	double currentHeight = cam.get (CV_CAP_PROP_FRAME_HEIGHT);
-	std::cout << "width: " << currentWidth << " pixels / height: " << currentHeight << " pixels / fps: " << fps << std::endl;
+  double fps = cam.get (cv::CAP_PROP_FPS);
+  double currentWidth = cam.get (cv::CAP_PROP_FRAME_WIDTH);
+  double currentHeight = cam.get (cv::CAP_PROP_FRAME_HEIGHT);
+  std::cout << "width: " << currentWidth << " pixels / height: " << currentHeight << " pixels / fps: " << fps << std::endl;
 
-	if (toFile) {
-		int codec = static_cast<int> (cam.get (CV_CAP_PROP_FOURCC));
-		char strCodec [] = {(char) (codec & 0XFF) , (char) ((codec & 0XFF00) >> 8), (char) ((codec & 0XFF0000) >> 16), (char) ((codec & 0XFF000000) >> 24), 0};
-		video.open (outputFileName, codec, fps, cv::Size (frameWidth, frameHeight), true);
-		std::cout << "OPENING FILE " << outputFileName << std::endl;
-		if (! video.isOpened()) std::cout << "-> FILE NOT FOUND" << std::endl;
-		std::cout << "Input codec type: " << strCodec << std::endl;
-	}
+  if (toFile) {
+    int codec = static_cast<int> (cam.get (cv::CAP_PROP_FOURCC));
+    char strCodec [] = {(char) (codec & 0XFF) , (char) ((codec & 0XFF00) >> 8), (char) ((codec & 0XFF0000) >> 16), (char) ((codec & 0XFF000000) >> 24), 0};
+    video.open (outputFileName, codec, fps, cv::Size (frameWidth, frameHeight), true);
+    std::cout << "OPENING FILE " << outputFileName << std::endl;
+    if (! video.isOpened()) std::cout << "-> FILE NOT FOUND" << std::endl;
+    std::cout << "Input codec type: " << strCodec << std::endl;
+  }
 	
-	double time = 0;
-	double subtime = 0;
-	struct timeval startTime, endTime;
-	gettimeofday (&startTime, NULL);
+  double time = 0;
+  double subtime = 0;
+  struct timeval startTime, endTime;
+  gettimeofday (&startTime, NULL);
 
-	int frameNb = 0;
-	int subframeNb = 0;
+  int frameNb = 0;
+  int subframeNb = 0;
 
-	delay = initDelay;
-	std::cout << "DELAY: " << (delay-1) << std::endl;
+  delay = initDelay;
+  std::cout << "DELAY: " << (delay-1) << std::endl;
 	
-	if (fromFile) delay = maxDelay;
-	startDelay = delay;
+  if (fromFile) delay = maxDelay;
+  startDelay = delay;
 	
-	newDelay = 0;
-	frameArray = new cv::Mat [maxDelay+2];
-	rowSize = ((float) frameHeight / (float) maxDelay);
-	colSize = ((float) frameWidth / (float) maxDelay);
-	std::cout << "cols: " << colSize << " pixels / rows: " << rowSize << " pixels" << std::endl;
+  newDelay = 0;
+  frameArray = new cv::Mat [maxDelay+2];
+  rowSize = ((float) frameHeight / (float) maxDelay);
+  colSize = ((float) frameWidth / (float) maxDelay);
+  std::cout << "cols: " << colSize << " pixels / rows: " << rowSize << " pixels" << std::endl;
 
-	borderWidth = round (frameWidth * borderWidthRatio / 2) * 2;
-	screenWidth = (frameWidth - borderWidth) / 2;
-	borderHeight = round (frameHeight * borderHeightRatio / 2) * 2;
-	screenHeight = (frameHeight - borderHeight) / 2;
+  borderWidth = round (frameWidth * borderWidthRatio / 2) * 2;
+  screenWidth = (frameWidth - borderWidth) / 2;
+  borderHeight = round (frameHeight * borderHeightRatio / 2) * 2;
+  screenHeight = (frameHeight - borderHeight) / 2;
 
 
-	while (newDelay < maxDelay+1)
+  while (newDelay < maxDelay+1)
+    {
+      cam.read (frameArray[newDelay]);
+
+      if (newDelay == 0)
 	{
-		cam.read (frameArray[newDelay]);
-
-		if (newDelay == 0)
-		{
-			std::string ty =  type2str (frameArray[newDelay].type());
-			printf ("matrix: %s %dx%d \n", ty.c_str(), frameArray[newDelay].cols, frameArray[newDelay].rows);
-		}
-
-		newDelay++;
-		frameNb++;
-		std::cout << "init: " << (round(((double)frameNb)/(maxDelay+1)*100)) << "%\r" << std::flush;
+	  std::string ty =  type2str (frameArray[newDelay].type());
+	  printf ("matrix: %s %dx%d \n", ty.c_str(), frameArray[newDelay].cols, frameArray[newDelay].rows);
 	}
-	std::cout << std::endl;
 
-	if (! toFile) {
-		cv::namedWindow("webcam-delays", CV_WINDOW_NORMAL);
-		cv::setWindowProperty ("webcam-delays", CV_WND_PROP_FULLSCREEN, 1);
-	}	
+      newDelay++;
+      frameNb++;
+      std::cout << "init: " << (round(((double)frameNb)/(maxDelay+1)*100)) << "%\r" << std::flush;
+    }
+  std::cout << std::endl;
+
+  if (! toFile) {
+    cv::namedWindow("webcam-delays", cv::WINDOW_NORMAL);
+    cv::setWindowProperty ("webcam-delays", cv::WND_PROP_FULLSCREEN, 1);
+  }	
 		
-	while (!stop)
+  while (!stop)
+    {
+      // Measure time
+      gettimeofday (&endTime, NULL);
+      double deltaTime = (endTime.tv_sec - startTime.tv_sec) + (float) (endTime.tv_usec - startTime.tv_usec) / 1000000L;
+      startTime = endTime;
+
+      time += deltaTime;
+      subtime += deltaTime;
+
+      frameNb++;
+      subframeNb++;
+
+      if (subtime >= 3)
 	{
-		// Measure time
-		gettimeofday (&endTime, NULL);
-		double deltaTime = (endTime.tv_sec - startTime.tv_sec) + (float) (endTime.tv_usec - startTime.tv_usec) / 1000000L;
-		startTime = endTime;
-
-		time += deltaTime;
-		subtime += deltaTime;
-
-		frameNb++;
-		subframeNb++;
-
-		if (subtime >= 3)
-		{
-			std::cout << "CAM: " << (int) (((float) subframeNb) / subtime) << "fps" << std::endl;
-			subtime = 0;
-			subframeNb = 0;
-		}
-
-		if (fadeRate != 0) {
-			fadeOut += fadeRate * deltaTime;
-			if (fadeOut > 1) { fadeOut = 1; fadeRate = 0; }
-			if (fadeOut < 0) { fadeOut = 0; fadeRate = 0; }
-		}
-			
-		if (newDelay >= maxDelay+2) { newDelay = 0; }
-		
-		displayDelay = newDelay+1 + (maxDelay - startDelay);
-		while (displayDelay >= maxDelay+2) { displayDelay -= (maxDelay + 2); }
-
-		currentDelay = displayDelay+1;
-		if (currentDelay >= maxDelay+2) { currentDelay -= (maxDelay + 2); }
-
-		// Create new frame
-		if (blackScreen) { finalFrame = cv::Mat (frameHeight, frameWidth, CV_8UC3, cv::Scalar(0, 0, 0)); }
-		else {
-			finalFrame = frameArray[currentDelay].clone();
-			currentPixel = finalFrame.ptr<cv::Vec3b>(0);
-		}
-
-		// Compute new frame
-		struct timeval start, end;
-		gettimeofday (&start, NULL);
-	
-		if (parallelComputation)
-		{
-			int t2 = pthread_create (&frameThread, NULL, getFrame, NULL);
-			if (t2) { std::cout << "Error: unable to create thread " << t2 << std::endl; exit(-1); }
-
-			if (! blackScreen && heterogeneousDelay) {
-				int t3;
-				if (vertical) {
-					if (reverse) {
-						if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeVerticalReverseSymmetric, NULL); }
-						else { t3 = pthread_create (&computeThread, NULL, computeVerticalReverse, NULL); }
-					} else {
-						if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeVerticalSymmetric, NULL); }
-						else { t3 = pthread_create (&computeThread, NULL, computeVertical, NULL); }
-					}
-				} else {
-					if (reverse) {
-						if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeHorizontalReverseSymmetric, NULL); }
-						else { t3 = pthread_create (&computeThread, NULL, computeHorizontalReverse, NULL); }
-					} else {
-						if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeHorizontalSymmetric, NULL); }
-						else { t3 = pthread_create (&computeThread, NULL, computeHorizontal, NULL); }
-					}
-				}
-				if (t3) { std::cout << "Error: unable to create thread " << t3 << std::endl; exit(-1); }
-
-				t3 = pthread_join (computeThread, &status);
-				if (t3) { std::cout << "Error: unable to join " << t3 << std::endl; exit(-1); }
-			}
-			
-			t2 = pthread_join (frameThread, &status);
-			if (t2) { std::cout << "Error: unable to join " << t2 << std::endl; exit(-1); }
-
-			int t1 = pthread_create (&displayThread, NULL, displayFrame, NULL);
-			if (t1) { std::cout << "Error: unable to create thread " << t1 << std::endl; exit(-1); }
-
-			t1 = pthread_join (displayThread, &status);
-			if (t1) { std::cout << "Error: unable to join " << t1 << std::endl; exit(-1); }
-		}
-
-		else {
-			displayFrame (0);
-			getFrame (0);
-
-			if (! blackScreen && heterogeneousDelay) {
-				if (vertical) {
-					if (reverse) { computeVerticalReverse(0); }
-					else { computeVertical(0); }
-				} else {
-					if (reverse) { computeHorizontalReverse(0); }
-					else { computeHorizontal(0); }
-				}
-			}
-		}
-
-		gettimeofday (&end, NULL);
-		displayDelay = newDelay;
-		newDelay++;
-		
-
-		if (switchingTime > 0 && time > switchingTime)
-		{
-			vertical = !vertical;
-			if (useSymmetric && vertical) { symmetric = !symmetric; }
-			if ((useSymmetric && vertical && symmetric) || (!useSymmetric && vertical)) { reverse = !reverse; }
-			time = 0;
-		}
+	  std::cout << "CAM: " << (int) (((float) subframeNb) / subtime) << "fps" << std::endl;
+	  subtime = 0;
+	  subframeNb = 0;
 	}
+
+      if (fadeRate != 0) {
+	fadeOut += fadeRate * deltaTime;
+	if (fadeOut > 1) { fadeOut = 1; fadeRate = 0; }
+	if (fadeOut < 0) { fadeOut = 0; fadeRate = 0; }
+      }
+			
+      if (newDelay >= maxDelay+2) { newDelay = 0; }
+		
+      displayDelay = newDelay+1 + (maxDelay - startDelay);
+      while (displayDelay >= maxDelay+2) { displayDelay -= (maxDelay + 2); }
+
+      currentDelay = displayDelay+1;
+      if (currentDelay >= maxDelay+2) { currentDelay -= (maxDelay + 2); }
+
+      // Create new frame
+      if (blackScreen) { finalFrame = cv::Mat (frameHeight, frameWidth, CV_8UC3, cv::Scalar(0, 0, 0)); }
+      else {
+	finalFrame = frameArray[currentDelay].clone();
+	currentPixel = finalFrame.ptr<cv::Vec3b>(0);
+      }
+
+      // Compute new frame
+      struct timeval start, end;
+      gettimeofday (&start, NULL);
 	
-	return 0;
+      if (parallelComputation)
+	{
+	  int t2 = pthread_create (&frameThread, NULL, getFrame, NULL);
+	  if (t2) { std::cout << "Error: unable to create thread " << t2 << std::endl; exit(-1); }
+
+	  if (! blackScreen && heterogeneousDelay) {
+	    int t3;
+	    if (vertical) {
+	      if (reverse) {
+		if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeVerticalReverseSymmetric, NULL); }
+		else { t3 = pthread_create (&computeThread, NULL, computeVerticalReverse, NULL); }
+	      } else {
+		if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeVerticalSymmetric, NULL); }
+		else { t3 = pthread_create (&computeThread, NULL, computeVertical, NULL); }
+	      }
+	    } else {
+	      if (reverse) {
+		if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeHorizontalReverseSymmetric, NULL); }
+		else { t3 = pthread_create (&computeThread, NULL, computeHorizontalReverse, NULL); }
+	      } else {
+		if (symmetric) { t3 = pthread_create (&computeThread, NULL, computeHorizontalSymmetric, NULL); }
+		else { t3 = pthread_create (&computeThread, NULL, computeHorizontal, NULL); }
+	      }
+	    }
+	    if (t3) { std::cout << "Error: unable to create thread " << t3 << std::endl; exit(-1); }
+
+	    t3 = pthread_join (computeThread, &status);
+	    if (t3) { std::cout << "Error: unable to join " << t3 << std::endl; exit(-1); }
+	  }
+			
+	  t2 = pthread_join (frameThread, &status);
+	  if (t2) { std::cout << "Error: unable to join " << t2 << std::endl; exit(-1); }
+
+	  int t1 = pthread_create (&displayThread, NULL, displayFrame, NULL);
+	  if (t1) { std::cout << "Error: unable to create thread " << t1 << std::endl; exit(-1); }
+
+	  t1 = pthread_join (displayThread, &status);
+	  if (t1) { std::cout << "Error: unable to join " << t1 << std::endl; exit(-1); }
+	}
+
+      else {
+	displayFrame (0);
+	getFrame (0);
+
+	if (! blackScreen && heterogeneousDelay) {
+	  if (vertical) {
+	    if (reverse) { computeVerticalReverse(0); }
+	    else { computeVertical(0); }
+	  } else {
+	    if (reverse) { computeHorizontalReverse(0); }
+	    else { computeHorizontal(0); }
+	  }
+	}
+      }
+
+      gettimeofday (&end, NULL);
+      displayDelay = newDelay;
+      newDelay++;
+		
+
+      if (switchingTime > 0 && time > switchingTime)
+	{
+	  vertical = !vertical;
+	  if (useSymmetric && vertical) { symmetric = !symmetric; }
+	  if ((useSymmetric && vertical && symmetric) || (!useSymmetric && vertical)) { reverse = !reverse; }
+	  time = 0;
+	}
+    }
+	
+  return 0;
 }
 
 
@@ -367,141 +367,141 @@ int main (int argc, char *argv[])
 
 void *displayFrame (void *arg)
 {
-	struct timeval start, end;
-	gettimeofday (&start, NULL);
+  struct timeval start, end;
+  gettimeofday (&start, NULL);
 
-	if (zoom > 1) {
-		cv::Rect zoomRectangle = cv::Rect (frameWidth * ((zoom-1)/zoom) / 2, frameHeight * ((zoom-1)/zoom) / 2, frameWidth / zoom, frameHeight / zoom);
-		finalFrame = finalFrame (zoomRectangle);
-	}
+  if (zoom > 1) {
+    cv::Rect zoomRectangle = cv::Rect (frameWidth * ((zoom-1)/zoom) / 2, frameHeight * ((zoom-1)/zoom) / 2, frameWidth / zoom, frameHeight / zoom);
+    finalFrame = finalFrame (zoomRectangle);
+  }
 	
-	if (flipFrame ) { cv::flip (finalFrame, finalFrame, 1); }
+  if (flipFrame ) { cv::flip (finalFrame, finalFrame, 1); }
 
-	if (cropFrame) {
-		const cv::Rect cropRectangle = cv::Rect (frameWidth * cropLeft, frameHeight * cropTop, frameWidth * (1 - cropLeft + cropRight), frameHeight * (1 - cropTop + cropBottom));
-		cv::Mat blackFrame = cv::Mat (frameHeight, frameWidth, CV_8UC3, cv::Scalar(0, 0, 0));
-		finalFrame (cropRectangle).copyTo (blackFrame (cropRectangle));
-		finalFrame = blackFrame;
-	}
+  if (cropFrame) {
+    const cv::Rect cropRectangle = cv::Rect (frameWidth * cropLeft, frameHeight * cropTop, frameWidth * (1 - cropLeft + cropRight), frameHeight * (1 - cropTop + cropBottom));
+    cv::Mat blackFrame = cv::Mat (frameHeight, frameWidth, CV_8UC3, cv::Scalar(0, 0, 0));
+    finalFrame (cropRectangle).copyTo (blackFrame (cropRectangle));
+    finalFrame = blackFrame;
+  }
 
-	if (cropBorder) {
-		cv::Mat output = cv::Mat (screenHeight * 2, screenWidth * 2, CV_8UC3, cv::Scalar (0, 0, 0));
+  if (cropBorder) {
+    cv::Mat output = cv::Mat (screenHeight * 2, screenWidth * 2, CV_8UC3, cv::Scalar (0, 0, 0));
 
-		finalFrame (cv::Rect (0, 0, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, 0, screenWidth, screenHeight)));
-		finalFrame (cv::Rect (screenWidth + borderWidth, 0, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, 0, screenWidth, screenHeight)));
-		finalFrame (cv::Rect (0, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, screenHeight, screenWidth, screenHeight)));
-		finalFrame (cv::Rect (screenWidth + borderWidth, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, screenHeight, screenWidth, screenHeight)));
+    finalFrame (cv::Rect (0, 0, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, 0, screenWidth, screenHeight)));
+    finalFrame (cv::Rect (screenWidth + borderWidth, 0, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, 0, screenWidth, screenHeight)));
+    finalFrame (cv::Rect (0, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (0, screenHeight, screenWidth, screenHeight)));
+    finalFrame (cv::Rect (screenWidth + borderWidth, screenHeight + borderHeight, screenWidth, screenHeight)).copyTo (output (cv::Rect (screenWidth, screenHeight, screenWidth, screenHeight)));
 
-		finalFrame = output;
-	}
+    finalFrame = output;
+  }
 	
-	if (fadeOut > 0) { finalFrame.convertTo (finalFrame, -1, 1-fadeOut); }
-	if (resizeFrame) { cv::resize (finalFrame, finalFrame, cv::Size (windowWidth, windowHeight)); }
+  if (fadeOut > 0) { finalFrame.convertTo (finalFrame, -1, 1-fadeOut); }
+  if (resizeFrame) { cv::resize (finalFrame, finalFrame, cv::Size (windowWidth, windowHeight)); }
 
-	//cv::GaussianBlur (*currentFrame, *currentFrame, cv::Size(7,7), 1.5, 1.5);
-	if (toFile) { video << finalFrame; } else { cv::imshow ("webcam-delays", finalFrame); }
+  //cv::GaussianBlur (*currentFrame, *currentFrame, cv::Size(7,7), 1.5, 1.5);
+  if (toFile) { video << finalFrame; } else { cv::imshow ("webcam-delays", finalFrame); }
 
-	int key = cv::waitKey(1);
-	if (key > 0)
+  int key = cv::waitKey(1);
+  if (key > 0)
+    {
+      key = key & 0xFF;
+      std::cout << "KEY: " << key << std::endl;
+
+      if ((key >= 48 && key <= 57) || (key >= 176 && key <= 185)) {
+	unsigned int newDelay = 1;
+	if (key >= 48 && key <= 57) { newDelay = (key - 48) * 15 + 1; }
+	if (key >= 176 && key <= 185) { newDelay = (key - 176) * 15 + 1; }
+	if (newDelay > maxDelay) { newDelay = maxDelay; }
+	delay = newDelay;
+	startDelay = newDelay;
+	std::cout << "DELAY: " << (delay-1) << std::endl;
+      }
+
+      switch (key)
 	{
-		key = key & 0xFF;
-		std::cout << "KEY: " << key << std::endl;
-
-		if ((key >= 48 && key <= 57) || (key >= 176 && key <= 185)) {
-			unsigned int newDelay = 1;
-			if (key >= 48 && key <= 57) { newDelay = (key - 48) * 15 + 1; }
-			if (key >= 176 && key <= 185) { newDelay = (key - 176) * 15 + 1; }
-			if (newDelay > maxDelay) { newDelay = maxDelay; }
-			delay = newDelay;
-			startDelay = newDelay;
-			std::cout << "DELAY: " << (delay-1) << std::endl;
-		}
-
-		switch (key)
-		{
-		case 27 : // Escape
-			stop = true;
-			break;
+	case 27 : // Escape
+	  stop = true;
+	  break;
 			
-		case 32 : // Space
-			// if (fadeOut == 0) { fadeRate = 3; }
-			// else if (fadeOut == 1) { fadeRate = -3; }
-			blackScreen = !blackScreen;
-			break;
+	case 32 : // Space
+	  // if (fadeOut == 0) { fadeRate = 3; }
+	  // else if (fadeOut == 1) { fadeRate = -3; }
+	  blackScreen = !blackScreen;
+	  break;
 
-		case 8 : // Backslash
-			if (fadeOut == 0) { fadeRate = 0.2; }
-			else if (fadeOut == 1) { fadeRate = -0.2; }
-			break;
+	case 8 : // Backslash
+	  if (fadeOut == 0) { fadeRate = 0.2; }
+	  else if (fadeOut == 1) { fadeRate = -0.2; }
+	  break;
 
-		case 13 : case 141 : // Enter
-			heterogeneousDelay = !heterogeneousDelay;
-			delay = 120;
-			startDelay = 120;
-			break;
+	case 13 : case 141 : // Enter
+	  heterogeneousDelay = !heterogeneousDelay;
+	  delay = 120;
+	  startDelay = 120;
+	  break;
 
-		case 114 : // r
-			reverse = !reverse;
-			break;
+	case 114 : // r
+	  reverse = !reverse;
+	  break;
 
-		case 115 : // s
-			symmetric = !symmetric;
-			break;
+	case 115 : // s
+	  symmetric = !symmetric;
+	  break;
 
-		case 104 : // h
-			vertical = false;
-			break;
+	case 104 : // h
+	  vertical = false;
+	  break;
 			
-		case 118 : // v
-			vertical = true;
-			break;
+	case 118 : // v
+	  vertical = true;
+	  break;
 
-		case 99 : // c
-			cropFrame = true;
-			break;
+	case 99 : // c
+	  cropFrame = true;
+	  break;
 			
-		case 102 : // f
-			cropFrame = false;
-			break;
+	case 102 : // f
+	  cropFrame = false;
+	  break;
 			
-		case 43 : case 171 : // +
-			delay++; if (delay > maxDelay) { delay = maxDelay; }
-			startDelay = delay;
-			std::cout << "DELAY: " << (delay-1) << std::endl;
-			break;
+	case 43 : case 171 : // +
+	  delay++; if (delay > maxDelay) { delay = maxDelay; }
+	  startDelay = delay;
+	  std::cout << "DELAY: " << (delay-1) << std::endl;
+	  break;
 
-		case 45 : case 173 : // -
-			delay--; if (delay <= 1) { delay = 1; }
-			startDelay = delay;
-			std::cout << "DELAY: " << (delay-1) << std::endl;
-			break;
+	case 45 : case 173 : // -
+	  delay--; if (delay <= 1) { delay = 1; }
+	  startDelay = delay;
+	  std::cout << "DELAY: " << (delay-1) << std::endl;
+	  break;
 
-		// case 85 : newFocus++; if (newFocus >= 256) { newFocus = 255; } break;
-		// case 86 : newFocus--; if (newFocus < 0) { newFocus = 0; } break;
-		}
+	  // case 85 : newFocus++; if (newFocus >= 256) { newFocus = 255; } break;
+	  // case 86 : newFocus--; if (newFocus < 0) { newFocus = 0; } break;
 	}
+    }
 	
-	gettimeofday (&end, NULL);
+  gettimeofday (&end, NULL);
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *getFrame (void *arg)
 {
-	struct timeval start, end;
-	gettimeofday (&start, NULL);
+  struct timeval start, end;
+  gettimeofday (&start, NULL);
 
-	cam.read (frameArray[newDelay]);
-	if (frameArray[newDelay].empty()) {
-		stop = true;
-		if (parallelComputation) { pthread_exit (NULL); }
-		return NULL;
-	}
+  cam.read (frameArray[newDelay]);
+  if (frameArray[newDelay].empty()) {
+    stop = true;
+    if (parallelComputation) { pthread_exit (NULL); }
+    return NULL;
+  }
 	
-	gettimeofday (&end, NULL);
+  gettimeofday (&end, NULL);
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
@@ -510,146 +510,146 @@ void *getFrame (void *arg)
 
 void *computeVertical (void *arg)
 {
-	workingDelay = currentDelay;
-	float firstCol = ((float) frameWidth / (float) delay);
+  workingDelay = currentDelay;
+  float firstCol = ((float) frameWidth / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastCol = (d+1) * ((float) frameWidth / (float) delay);
+
+      for (unsigned int c = (unsigned int) firstCol; c < (unsigned int) lastCol; c++)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
-
-		float lastCol = (d+1) * ((float) frameWidth / (float) delay);
-
-		for (unsigned int c = (unsigned int) firstCol; c < (unsigned int) lastCol; c++)
-		{
-			unsigned int i = c;
-			for (int r = 0; r < frameHeight; r++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i += frameWidth;
-			}
-		}
-		firstCol = lastCol;
+	  unsigned int i = c;
+	  for (int r = 0; r < frameHeight; r++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i += frameWidth;
+	    }
 	}
+      firstCol = lastCol;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeVerticalSymmetric (void *arg)
 {
-	workingDelay = currentDelay + delay/2;
-	if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
-	float firstCol = ((float) frameWidth / (float) delay);
+  workingDelay = currentDelay + delay/2;
+  if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
+  float firstCol = ((float) frameWidth / (float) delay);
 	
-	for (unsigned int d = 1; d < delay/2; d++)
+  for (unsigned int d = 1; d < delay/2; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastCol = (d+1) * ((float) frameWidth / (float) delay);
+
+      for (unsigned int c = (unsigned int) firstCol; c < (unsigned int) lastCol; c++)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+	  unsigned int i = c;
+	  for (int r = 0; r < frameHeight; r++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i += frameWidth;
+	    }
 
-		float lastCol = (d+1) * ((float) frameWidth / (float) delay);
+	  i = (frameWidth-1) - c;
+	  for (int r = 0; r < frameHeight; r++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i += frameWidth;
+	    }
 
-		for (unsigned int c = (unsigned int) firstCol; c < (unsigned int) lastCol; c++)
-		{
-			unsigned int i = c;
-			for (int r = 0; r < frameHeight; r++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i += frameWidth;
-			}
-
-			i = (frameWidth-1) - c;
-			for (int r = 0; r < frameHeight; r++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i += frameWidth;
-			}
-
-		}
-		firstCol = lastCol;
 	}
+      firstCol = lastCol;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeVerticalReverse (void *arg)
 {
-	workingDelay = currentDelay;
-	float firstCol = (delay-1) * ((float) frameWidth / (float) delay);
+  workingDelay = currentDelay;
+  float firstCol = (delay-1) * ((float) frameWidth / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastCol = (delay-(d+1)) * ((float) frameWidth / (float) delay);
+
+      for (unsigned int c = (unsigned int) firstCol; c > (unsigned int) lastCol; c--)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
-
-		float lastCol = (delay-(d+1)) * ((float) frameWidth / (float) delay);
-
-		for (unsigned int c = (unsigned int) firstCol; c > (unsigned int) lastCol; c--)
-		{
-			unsigned int i = c;
-			for (int r = 0; r < frameHeight; r++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i += frameWidth;
-			}
-		}
-		firstCol = lastCol;
+	  unsigned int i = c;
+	  for (int r = 0; r < frameHeight; r++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i += frameWidth;
+	    }
 	}
+      firstCol = lastCol;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeVerticalReverseSymmetric (void *arg)
 {
-	workingDelay = currentDelay + delay/2;
-	if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
-	float firstCol = (delay-1) * ((float) frameWidth / (float) delay);
+  workingDelay = currentDelay + delay/2;
+  if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
+  float firstCol = (delay-1) * ((float) frameWidth / (float) delay);
 	
-	for (unsigned int d = 1; d < delay/2; d++)
+  for (unsigned int d = 1; d < delay/2; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastCol = (delay/2-(d+1)) * ((float) frameWidth / (float) delay);
+
+      for (unsigned int c = (unsigned int) firstCol; c > (unsigned int) lastCol; c--)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+	  unsigned int i = c;
+	  for (int r = 0; r < frameHeight; r++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i += frameWidth;
+	    }
 
-		float lastCol = (delay/2-(d+1)) * ((float) frameWidth / (float) delay);
-
-		for (unsigned int c = (unsigned int) firstCol; c > (unsigned int) lastCol; c--)
-		{
-			unsigned int i = c;
-			for (int r = 0; r < frameHeight; r++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i += frameWidth;
-			}
-
-			i = frameWidth - c;
-			for (int r = 0; r < frameHeight; r++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i += frameWidth;
-			}
-		}
-		firstCol = lastCol;
+	  i = frameWidth - c;
+	  for (int r = 0; r < frameHeight; r++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i += frameWidth;
+	    }
 	}
+      firstCol = lastCol;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
@@ -657,201 +657,201 @@ void *computeVerticalReverseSymmetric (void *arg)
 
 void *computeHorizontal (void *arg)
 {
-	workingDelay = currentDelay; // + (maxDelay - delay);
-	//if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }
-	float firstRow = ((float) frameHeight / (float) delay);
+  workingDelay = currentDelay; // + (maxDelay - delay);
+  //if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }
+  float firstRow = ((float) frameHeight / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastRow = (d+1) * ((float) frameHeight / (float) delay);
+
+      for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
-
-		float lastRow = (d+1) * ((float) frameHeight / (float) delay);
-
-		for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
-		{
-			unsigned int i = r * frameWidth;
-			for (int c = 0; c < frameWidth; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-		}
-		firstRow = lastRow;
+	  unsigned int i = r * frameWidth;
+	  for (int c = 0; c < frameWidth; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 	}
+      firstRow = lastRow;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeHorizontalSymmetric (void *arg)
 {
-	workingDelay = currentDelay + delay/2;
-	if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
-	float firstRow = ((float) frameHeight / (float) delay);
+  workingDelay = currentDelay + delay/2;
+  if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
+  float firstRow = ((float) frameHeight / (float) delay);
 	
-	for (unsigned int d = 1; d < delay/2; d++)
+  for (unsigned int d = 1; d < delay/2; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastRow = (d+1) * ((float) frameHeight / (float) delay);
+
+      for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+	  unsigned int i = r * frameWidth;
+	  for (int c = 0; c < frameWidth; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 
-		float lastRow = (d+1) * ((float) frameHeight / (float) delay);
-
-		for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
-		{
-			unsigned int i = r * frameWidth;
-			for (int c = 0; c < frameWidth; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-
-			i = (frameHeight - r) * frameWidth;
-			for (int c = 0; c < frameWidth; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-		}
-		firstRow = lastRow;
+	  i = (frameHeight - r) * frameWidth;
+	  for (int c = 0; c < frameWidth; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 	}
+      firstRow = lastRow;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeHorizontalSymmetricBis (void *arg)
 {
-	workingDelay = currentDelay;
-	float firstRow = ((float) frameHeight / (float) delay);
+  workingDelay = currentDelay;
+  float firstRow = ((float) frameHeight / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastRow = (d+1) * ((float) frameHeight / (float) delay);
+
+      for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
-
-		float lastRow = (d+1) * ((float) frameHeight / (float) delay);
-
-		for (unsigned int r = (unsigned int) firstRow; r < (unsigned int) lastRow; r++)
-		{
-			unsigned int i = r * frameWidth;
-			for (int c = 0; c < frameWidth/2; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-		}
-		firstRow = lastRow;
+	  unsigned int i = r * frameWidth;
+	  for (int c = 0; c < frameWidth/2; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 	}
+      firstRow = lastRow;
+    }
 
-	workingDelay = currentDelay;
-	firstRow = (delay-1) * ((float) frameHeight / (float) delay);
+  workingDelay = currentDelay;
+  firstRow = (delay-1) * ((float) frameHeight / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastRow = (delay-(d+1)) * ((float) frameHeight / (float) delay);
+
+      for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
-
-		float lastRow = (delay-(d+1)) * ((float) frameHeight / (float) delay);
-
-		for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
-		{
-			unsigned int i = r * frameWidth + frameWidth/2;
-			for (int c = 0; c < frameWidth/2; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-		}
-		firstRow = lastRow;
+	  unsigned int i = r * frameWidth + frameWidth/2;
+	  for (int c = 0; c < frameWidth/2; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 	}
+      firstRow = lastRow;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeHorizontalReverse (void *arg)
 {
-	workingDelay = currentDelay;
-	float firstRow = (delay-1) * ((float) frameHeight / (float) delay);
+  workingDelay = currentDelay;
+  float firstRow = (delay-1) * ((float) frameHeight / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastRow = (delay-(d+1)) * ((float) frameHeight / (float) delay);
+
+      for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
-
-		float lastRow = (delay-(d+1)) * ((float) frameHeight / (float) delay);
-
-		for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
-		{
-			unsigned int i = r * frameWidth;
-			for (int c = 0; c < frameWidth; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-		}
-		firstRow = lastRow;
+	  unsigned int i = r * frameWidth;
+	  for (int c = 0; c < frameWidth; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 	}
+      firstRow = lastRow;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 
 
 void *computeHorizontalReverseSymmetric (void *arg)
 {
-	workingDelay = currentDelay + delay/2;
-	if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
-	float firstRow = (delay-1) * ((float) frameHeight / (float) delay);
+  workingDelay = currentDelay + delay/2;
+  if (workingDelay >= maxDelay+2) { workingDelay -= (maxDelay+2); }	
+  float firstRow = (delay-1) * ((float) frameHeight / (float) delay);
 	
-	for (unsigned int d = 1; d < delay; d++)
+  for (unsigned int d = 1; d < delay; d++)
+    {
+      workingDelay++;
+      if (workingDelay >= maxDelay+2) { workingDelay = 0; }
+      workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+
+      float lastRow = (delay/2-(d+1)) * ((float) frameHeight / (float) delay);
+
+      for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
 	{
-		workingDelay++;
-		if (workingDelay >= maxDelay+2) { workingDelay = 0; }
-		workingPixel = frameArray[workingDelay].ptr<cv::Vec3b>(0);
+	  unsigned int i = r * frameWidth;
+	  for (int c = 0; c < frameWidth; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 
-		float lastRow = (delay/2-(d+1)) * ((float) frameHeight / (float) delay);
-
-		for (unsigned int r = (unsigned int) firstRow; r > (unsigned int) lastRow; r--)
-		{
-			unsigned int i = r * frameWidth;
-			for (int c = 0; c < frameWidth; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-
-			i = (frameHeight - r) * frameWidth;
-			for (int c = 0; c < frameWidth; c++)
-			{
-				currentPixel[i][0] = workingPixel[i][0];
-				currentPixel[i][1] = workingPixel[i][1];
-				currentPixel[i][2] = workingPixel[i][2];
-				i++;
-			}
-		}
-		firstRow = lastRow;
+	  i = (frameHeight - r) * frameWidth;
+	  for (int c = 0; c < frameWidth; c++)
+	    {
+	      currentPixel[i][0] = workingPixel[i][0];
+	      currentPixel[i][1] = workingPixel[i][1];
+	      currentPixel[i][2] = workingPixel[i][2];
+	      i++;
+	    }
 	}
+      firstRow = lastRow;
+    }
 
-	if (parallelComputation) { pthread_exit (NULL); }
+  if (parallelComputation) { pthread_exit (NULL); }
 }
 

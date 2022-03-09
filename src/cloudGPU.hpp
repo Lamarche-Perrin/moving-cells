@@ -243,21 +243,10 @@ typedef struct HsvColor
 
 // FUNCTIONS
 
-// void extractBodies (float *dPixel);
-// void displaySensor (cv::Mat *depthFrame);
-// void calibrateKinect (int key);
-
 int ms_sleep (unsigned int ms);
 
 
 // SIMPLE STRUCTURES
-
-// struct Pixel
-// {
-//     int x; int y; int z;
-//     Pixel (int cx, int cy, int cz) : x (cx), y (cy), z (cz) {}
-// };
-
 
 struct Body
 {
@@ -311,7 +300,6 @@ public:
 
   int graphicsWidth         = 1920;
   int graphicsHeight        = 1080;
-  int threadNumber          = 8;
 
   // PHYSICS PARAMETER
   int borderMode            = MIRROR_BORDERS;
@@ -330,16 +318,6 @@ public:
   BodyList *newBodyList = new BodyList ();
   Body *mouseBody = new Body ();
 
-  // float bodyX               = 0.5;
-  // float bodyY               = 0.5;
-  // float bodyWeight          = 0.;
-  // float bodyRadius          = 0.;
-
-  // bool withFixedBody        = false;
-  // float fixedBodyX          = 1./3;
-  // float fixedBodyY          = 1./3;
-  // float fixedBodyWeight     = 4;
-
   RgbColor particleColorMin = RgbColor (  0,   0,   0);
   RgbColor particleColorMoy = RgbColor (  3,   6,  16);
   RgbColor particleColorMax = RgbColor (255, 255, 255);
@@ -354,7 +332,6 @@ public:
 
   // PROGRAM PARAMETERS
   static const int maxParticleNumber   = 1920 * 1080 * 4;
-  static const int maxThreadNumber     = 16;
   const float maxParticleSpeed         = 1000000.;
 	
   // PROGRAM VARIABLES
@@ -392,10 +369,6 @@ public:
   float rDelay;
   float rGravitationFactor;
   float rGravitationAngle;
-  // float rBodyRadius;
-  // float rBodyX;
-  // float rBodyY;
-  // float rBodyWeight;
   float rParticleDamping;
   float rPixelSize;
   float rPixelDrawingRate;
@@ -406,8 +379,16 @@ public:
   float rHeightBorderDoubled;
 
   // PARTICLE VARIABLES
+  cl::vector <cl::float4_> GPU_particles;
+  cl::vector <cl::float4_> GPU_particlesNew;
+
+  cl::image2d GPU_pixels;
+  cl::image2d GPU_frame;
+  cl::image_format rFloat (CL_R, CL_FLOAT);
+  cl::image_format bgraInt8 (CL_BGRA, CL_UNORM_INT8);
+
   Particle *particles;
-  float *pixels;
+  cv::Mat *pixels;
   cv::Mat *frame;
   cv::Mat finalFrame;
   int frameIndex;
@@ -422,15 +403,18 @@ public:
   float bodyTopWeight;
   float bodyBottomWeight;
 
-  // THREAD VARIABLES
-  void *status;
-  pthread_attr_t attr;
+  // GPU VARIABLES
+  cl::device GPU_device;
+  cl::context GPU_context;
+  cl::command_queue GPU_queue;
+  
+  cl::program GPU_updateParticles_program;
+  cl::program GPU_moveParticles_program;
+  cl::program GPU_applyParticles_program;
 
-  pthread_t threads [maxThreadNumber];
-  int firstParticle [maxThreadNumber];
-  int lastParticle [maxThreadNumber];
-  int firstPixel [maxThreadNumber];
-  int lastPixel [maxThreadNumber];
+  cl::program GPU_cleanPixels_program;
+  cl::program GPU_clearPixels_program;
+  cl::program GPU_applyPixels_program;
 
   Cloud ();
   ~Cloud ();
@@ -439,7 +423,7 @@ public:
   void setup ();
   void setupEvents ();
   void setupParameters ();
-  void setupThreads ();
+  void setupGPU ();
   void setupColor ();
   void setdown ();
 
@@ -447,6 +431,7 @@ public:
   void run ();
 
   void initParticles (int type);
+  void particlesToGPU ();
   void getTime ();
 
   void updateBodies ();
@@ -464,18 +449,14 @@ public:
   void readParticlePositions (int index);
   void readParticlePositions (std::string filename);
 
-  static void *updateAndMoveParticles (void *args);
-  void updateAndMoveParticles (int id);
+  void updateParticles ();
+  void moveParticles ();
+  void applyParticles ();
 
-  static void *cleanPixels (void *args);
-  void cleanPixels (int id);
-
-  static void *clearPixels (void *args);
-  void clearPixels (int id);
-
-  static void *applyPixels (void *args);
-  void applyPixels (int id);
-
+  void cleanPixels ();
+  void clearPixels ();
+  void applyPixels ();
+  
   void openOutputParameterFile (std::string filename);
   void writeOutputParameterFile ();
   void closeOutputParameterFile ();

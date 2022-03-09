@@ -39,20 +39,6 @@
 
 #include <list>
 
-// DEFINE ENUM
-
-#define NO_BORDER                 0
-#define CYCLIC_BORDER             1
-#define MIRROR_BORDER             2
-
-#define UNIFORM_INIT              0
-#define RANDOM_INIT               1
-
-#define SYMMETRIC_GRAVITATION     0
-#define QUADRANT_GRAVITATION      1
-#define LINEAR_GRAVITATION        2
-#define EXPONENTIAL_GRAVITATION   3
-
 
 // PRE-DEFINITIONS
 
@@ -60,42 +46,45 @@ class Kinect;
 class Object;
 typedef std::list<Object*> ObjectList;
 
+typedef cv::Point3f Point;
+typedef std::list<Point> PointList;
+
 
 struct Pixel
 {
-    int x; int y; int z;
-    float rx; float ry; float rz;
-    Pixel (int cx, int cy, int cz) : x(cx), y(cy), z(cz), rx(0), ry(0), rz(0) {}
-    Pixel (int cx, int cy, int cz, float crx, float cry, float crz) : x(cx), y(cy), z(cz), rx(crx), ry(cry), rz(crz) {}
+  int x; int y; int z;
+  float rx; float ry; float rz;
+  Pixel (int cx, int cy, int cz) : x(cx), y(cy), z(cz), rx(0), ry(0), rz(0) {}
+  Pixel (int cx, int cy, int cz, float crx, float cry, float crz) : x(cx), y(cy), z(cz), rx(crx), ry(cry), rz(crz) {}
 };
 
 
 class Object
 {
 public:
-	Kinect *kinect;
-    int index;
-    Object *closestObject;
-    double minDist;
+  Kinect *kinect;
+  int index;
+  Object *closestObject;
+  double minDist;
 
-	int pixelNb;
-    int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax;
-    int xMinS, xMoyS, xMaxS, yMinS, yMoyS, yMaxS, zMinS, zMoyS, zMaxS;
-	bool extrema;
+  int pixelNb;
+  int xMin, xMoy, xMax, yMin, yMoy, yMax, zMin, zMoy, zMax;
+  int xMinS, xMoyS, xMaxS, yMinS, yMoyS, yMaxS, zMinS, zMoyS, zMaxS;
+  bool extrema;
 
-	int rpixelNb;
-    float rxMin, rxMoy, rxMax, ryMin, ryMoy, ryMax, rzMin, rzMoy, rzMax;
-	float ratio;
-	bool rextrema;
+  int rpixelNb;
+  float rxMin, rxMoy, rxMax, ryMin, ryMoy, ryMax, rzMin, rzMoy, rzMax;
+  float ratio;
+  bool rextrema;
 
-	float x, y, weight;
+  float x, y, weight;
 	
-    Object (Kinect *vKinect) : kinect (vKinect), closestObject (0), minDist (-1) {}
+  Object (Kinect *vKinect) : kinect (vKinect), closestObject (0), minDist (-1) {}
 
-    void getClosestObject (ObjectList *list);
-    void update (double delay);
-    double getDistance (Object *object);
-    void print ();
+  void getClosestObject (ObjectList *list);
+  void update (double delay);
+  double getDistance (Object *object);
+  void print ();
 };
 
 
@@ -105,117 +94,137 @@ public:
 class Kinect
 {
 public:
-	float thresholdAdd = 100;
-	int objectMinSize = 5000;
-	bool reverseXAxis = false;
-	bool reverseYAxis = true;
+  float thresholdAdd = 50;
+  int objectMinSize = 5000;
+  bool reverseXAxis = false;
+  bool reverseYAxis = true;
 
-	bool useSpeed = false;
-	bool realPositioning = true;
-	bool realMoy = true;
+  bool useSpeed = false;
+  bool realPositioning = true;
+  bool realMoy = true;
 
-	bool thresholdFromFile = false;
+  bool thresholdFromFile = false;
+  int thresholdSteps = 10;
+  int thresholdBlurSize = 5;
+  float thresholdBlurVar = 5;
 
-	bool allowKinectCalibration = false;
-	bool allowSensorDisplay = true;
-	bool allowGraphicsDisplay = true;
+  bool allowKinectCalibration = false;
+  bool allowSensorDisplay = true;
+  bool allowGraphicsDisplay = true;
+  bool allowPointExtraction = true;
+  bool allowObjectDetection = true;
+  bool allowMeasures = false;
 
-	int graphicsWidth = 1024; //1920;
-	int graphicsHeight = 768; //1080;
-	int distanceMax = 0;
-	int waitingTime = 300000;
+  int graphicsWidth = 1024; //1920;
+  int graphicsHeight = 768; //1080;
+  int distanceMax = 0;
+  int distanceMin = 0;
+  int waitingTime = 30;
 
-	int depthWidth = 512;
-	int depthHeight = 424;
-	int depthDepth = 450;
+  int depthWidth = 512;
+  int depthHeight = 424;
+  int depthDepth = 450;
 
-	bool fromAbove = false;
-	float xMin = -2.30;
-	float xMax = 2.30;
-	float yMin = 0;
-	float yMax = 0;
-	float zMin = 2.00;
-	float zMax = 4.40;
-	float rMin = 0.45/1.75;
-	float rMoy = 1.35/1.75;
-	float rMax = 1.65/1.75;
+  bool fromAbove = false;
+  float xMin = -2.30;
+  float xMax = 2.30;
+  float yMin = 0;
+  float yMax = 0;
+  float zMin = 2.00;
+  float zMax = 4.40;
+  float rMin = 0.45/1.75;
+  float rMoy = 1.35/1.75;
+  float rMax = 1.65/1.75;
 
-	float weightMax = 1.;
-	float weightMin = -1.;
+  float weightMax = 1.;
+  float weightMin = -1.;
 
-	int depthCropLeft = 0;
-	int depthCropRight = 0;
-	int depthCropTop = 0;
-	int depthCropBottom = 0;
+  int depthCropLeft = 0;
+  int depthCropRight = 0;
+  int depthCropTop = 0;
+  int depthCropBottom = 0;
 
-	int objectCounter;
-	bool stop;
-	bool thresholdKinect;
+  int objectCounter;
+  bool stop;
+  bool thresholdKinect;
+  int thresholdKinectStep = 0;
 
-	cv::Mat *thresholdFrame;
-	ObjectList *objectList;
-	ObjectList *newObjectList;
-	//ObjectList *currentObjectList;
+  int measureNb;
+  float meanX, meanY, meanZ;
 
-	bool verbose = false;
-	int kinectFps = 0;
+  cv::Mat *thresholdFrame;
+  
+  ObjectList *objectList;
+  ObjectList *newObjectList;
 
-	libfreenect2::Freenect2 freenect2;
-	libfreenect2::PacketPipeline *pipeline;
-	libfreenect2::Freenect2Device *dev;
-	libfreenect2::SyncMultiFrameListener *listener;
-	libfreenect2::Registration *registration;
-	libfreenect2::FrameMap frames;
+  PointList *pointList;
+  PointList *newPointList;
 
-	struct timeval kinectStartTimer, kinectEndTimer;
-	int kinectFrameCounter;
-	double kinectDelay;
-	double kinectSumDelay = 0;
+  bool verbose = false;
+  int kinectFps = 0;
 
-	void *status;
-	pthread_attr_t attr;
-	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+  libfreenect2::Freenect2 freenect2;
+  libfreenect2::PacketPipeline *pipeline;
+  libfreenect2::Freenect2Device *dev;
+  libfreenect2::SyncMultiFrameListener *listener;
+  libfreenect2::Registration *registration;
+  libfreenect2::FrameMap frames;
 
-	Kinect ();
-	~Kinect ();
+  struct timeval kinectStartTimer, kinectEndTimer;
+  int kinectFrameCounter;
+  double kinectDelay;
+  double kinectSumDelay = 0;
 
-	void init ();
-	void run ();
-	static void *run (void *arg);
+  void *status;
+  pthread_attr_t attr;
+  pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-	void extractObjects (float *dPixel);
-	void extractObjects (float *dPixel, libfreenect2::Frame *undepth);
-	void displaySensor (cv::Mat *depthFrame);
-	void calibrateKinect (int key);
+  Kinect ();
+  ~Kinect ();
 
-	static void sigint_handler (int s);
-	int scale (float z);
-	float linearMap (float value, float min1, float max1, float min2, float max2);
+  void init ();
+  void run ();
+  static void *run (void *arg);
 
-	void loop ();
-	void setup ();
-	void setupThreads ();
-	void setupColor (bool init);
-	void setupDistribution ();
-	void initParticles (int type);
-	void getTime ();
-	void computeObjects ();
-	void computeDistributedObjects ();
-	void computeParticles ();
-	void draw ();
-	//int ms_sleep (unsigned int ms);
+  void extractObjects (float *dPixel);
+  void extractObjects (float *dPixel, libfreenect2::Frame *undepth);
+  void computeObjects ();
+  
+  void extractPoints (float *dPixel, libfreenect2::Frame *undepth);
+  void computeMeasures (float *dPixel, libfreenect2::Frame *undepth);
 
-	void *loop (void *arg);
+  void displaySensor (cv::Mat *depthFrame);
+  void displayObjects (cv::Mat *depthFrame);
+  void displayMeasures (cv::Mat *depthFrame);
+  void calibrateKinect (int key);
+
+  static void sigint_handler (int s);
+  int scale (float z);
+  float linearMap (float value, float min1, float max1, float min2, float max2);
+
+  // void loop ();
+  // void setup ();
+  // void setupThreads ();
+  // void setupColor (bool init);
+  // void setupDistribution ();
+  // void initParticles (int type);
+  // void getTime ();
+  // void computeDistributedObjects ();
+  // void computeParticles ();
+  // void draw ();
+  // //int ms_sleep (unsigned int ms);
+
+  // void *loop (void *arg);
 	
-	void *updateParticles (void *arg);
-	void *updateParticlesWithDistribution (void *arg);
-	void *moveParticles (void *arg);
-	void *applyParticles (void *arg);
+  // void *updateParticles (void *arg);
+  // void *updateParticlesWithDistribution (void *arg);
+  // void *moveParticles (void *arg);
+  // void *applyParticles (void *arg);
 
-	void *clearPixels (void *arg);
-	void *applyPixels (void *arg);
+  // void *clearPixels (void *arg);
+  // void *applyPixels (void *arg);
 
-	void saveConfig (int index);
-	void loadConfig (int index);
+  // void saveConfig (int index);
+  // void loadConfig (int index);
 };
 

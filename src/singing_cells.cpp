@@ -88,7 +88,7 @@ int main () {
 	if (! alcMakeContextCurrent (context)) { std::cerr << "Could not activate OpenAL context" << std::endl; return EXIT_FAILURE; } else { std::cout << "Activating OpenAL context" << std::endl; }
 
 	// Create window
-	cv::namedWindow ("singing-cells", CV_WINDOW_NORMAL);
+	cv::namedWindow ("singing-cells", cv::WINDOW_NORMAL);
 	cv::setMouseCallback ("singing-cells", mouseEvents, NULL);
 	cv::resizeWindow ("singing-cells", windowWidth, windowHeight);
 

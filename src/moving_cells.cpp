@@ -36,85 +36,85 @@
 
 int main (int argc, char *argv[])
 {
-	srand (time (NULL));
+  srand (time (NULL));
 
-	Kinect *kinect = new Kinect ();
-	kinect->graphicsWidth  = 1024;
-	kinect->graphicsHeight = 768;
+  Kinect *kinect = new Kinect ();
+  kinect->graphicsWidth  = 1024;
+  kinect->graphicsHeight = 768;
 
-	kinect->distanceMax = 2400;
-	kinect->xMin = -1.4;
-	kinect->yMin =  1.4;
-	kinect->zMin =  1.2;
-	kinect->zMax =  2.4;
-	kinect->rMin =  0.35;
-	kinect->rMoy =  0.65;
-	kinect->rMax =  0.85;
+  kinect->distanceMax = 2400;
+  kinect->xMin = -1.4;
+  kinect->yMin =  1.4;
+  kinect->zMin =  1.2;
+  kinect->zMax =  2.4;
+  kinect->rMin =  0.35;
+  kinect->rMoy =  0.65;
+  kinect->rMax =  0.85;
 
-	kinect->weightMin = -0.2;
-	kinect->weightMax =  1.0;
+  kinect->weightMin = -0.2;
+  kinect->weightMax =  1.0;
 
-	kinect->thresholdFromFile = true;
-	kinect->allowSensorDisplay = false;
-	kinect->waitingTime = 100000;
-	kinect->init();
+  kinect->thresholdFromFile = true;
+  kinect->allowSensorDisplay = false;
+  kinect->waitingTime = 100000;
+  kinect->init();
 	
-	pthread_t kinectThread;
-	int rcKinect = pthread_create (&kinectThread, NULL, &Kinect::run, (void *) kinect);
-	if (rcKinect) { std::cout << "Error: Unable to create thread " << rcKinect << std::endl; exit (-1); }
+  pthread_t kinectThread;
+  int rcKinect = pthread_create (&kinectThread, NULL, &Kinect::run, (void *) kinect);
+  if (rcKinect) { std::cout << "Error: Unable to create thread " << rcKinect << std::endl; exit (-1); }
 
-	Cloud *cloud = new Cloud ();
-	cloud->graphicsWidth  = 1024;
-	cloud->graphicsHeight = 768;
+  Cloud *cloud = new Cloud ();
+  cloud->graphicsWidth  = 1024;
+  cloud->graphicsHeight = 768;
 	
-	cloud->particleNumber = 1024 * 768 / 3;
-	cloud->displayBodies  = false;
-	cloud->particleDamping = 0.5;
-	cloud->init();
+  cloud->particleNumber = 1024 * 768 / 3;
+  cloud->displayBodies  = false;
+  cloud->particleDamping = 0.5;
+  cloud->init();
 
-	pthread_t cloudThread;
-	int rcCloud = pthread_create (&cloudThread, NULL, &Cloud::run, (void *) cloud);
-	if (rcCloud) { std::cout << "Error: Unable to create thread " << rcCloud << std::endl; exit (-1); }
+  pthread_t cloudThread;
+  int rcCloud = pthread_create (&cloudThread, NULL, &Cloud::run, (void *) cloud);
+  if (rcCloud) { std::cout << "Error: Unable to create thread " << rcCloud << std::endl; exit (-1); }
 
-	while (! cloud->stop && ! kinect->stop) {
-		pthread_mutex_lock (&cloud->mutex);
-		cloud->clearBodies();
-		pthread_mutex_lock (&kinect->mutex);
-		for (ObjectList::iterator it = kinect->objectList->begin(); it != kinect->objectList->end(); ++it) {
-			Object *object = *it;
-			cloud->addBody (new Body (object->x, object->y, object->weight));
-		}
-		pthread_mutex_unlock (&kinect->mutex);
-		pthread_mutex_unlock (&cloud->mutex);
-		usleep (30000);
-	};
+  while (! cloud->stop && ! kinect->stop) {
+    pthread_mutex_lock (&cloud->mutex);
+    cloud->clearBodies();
+    pthread_mutex_lock (&kinect->mutex);
+    for (ObjectList::iterator it = kinect->objectList->begin(); it != kinect->objectList->end(); ++it) {
+      Object *object = *it;
+      cloud->addBody (new Body (object->x, object->y, object->weight));
+    }
+    pthread_mutex_unlock (&kinect->mutex);
+    pthread_mutex_unlock (&cloud->mutex);
+    usleep (30000);
+  };
 
-	if (! cloud->stop) {
-		cloud->stop = true;
-		void *status;
-		rcCloud = pthread_join (cloudThread, &status);
-		if (rcCloud) { std::cout << "Error: Unable to join thread " << rcCloud << std::endl; exit(-1); }
-	}
+  if (! cloud->stop) {
+    cloud->stop = true;
+    void *status;
+    rcCloud = pthread_join (cloudThread, &status);
+    if (rcCloud) { std::cout << "Error: Unable to join thread " << rcCloud << std::endl; exit(-1); }
+  }
 
-	if (! kinect->stop) {
-		kinect->stop = true;
-		void *status;
-		rcKinect = pthread_join (kinectThread, &status);
-		if (rcKinect) { std::cout << "Error: Unable to join thread " << rcKinect << std::endl; exit(-1); }
-	}
+  if (! kinect->stop) {
+    kinect->stop = true;
+    void *status;
+    rcKinect = pthread_join (kinectThread, &status);
+    if (rcKinect) { std::cout << "Error: Unable to join thread " << rcKinect << std::endl; exit(-1); }
+  }
 	
-	// if (argc > 1) { cloud.configFilename = argv[1]; }
-	// if (argc > 2) { cloud.outputFilename = argv[2]; }
+  // if (argc > 1) { cloud.configFilename = argv[1]; }
+  // if (argc > 2) { cloud.outputFilename = argv[2]; }
 
-	// Body *center = new Body ();
-	// center->x = 0.5;
-	// center->y = 0.25;
-	// center->weight = 0.5;
-	// //cloud.addBody (center);
+  // Body *center = new Body ();
+  // center->x = 0.5;
+  // center->y = 0.25;
+  // center->weight = 0.5;
+  // //cloud.addBody (center);
 
-	delete cloud;
-	delete kinect;
+  delete cloud;
+  delete kinect;
 	
-	return 0;
+  return 0;
 }
 

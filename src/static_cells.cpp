@@ -29,24 +29,24 @@
  */
 
 
-#include "cloud.hpp"
+#include "cloudGPU.hpp"
 
 
 int main (int argc, char *argv[])
 {
-	srand (time (NULL));
+  srand (time (NULL));
 
-	Cloud *cloud = new Cloud ();
-	cloud->init();
+  Cloud *cloud = new Cloud ();
+  cloud->init();
 
-	pthread_t cloudThread;
-	int rcCloud = pthread_create (&cloudThread, NULL, &Cloud::run, (void *) cloud);
-	if (rcCloud) { std::cout << "Error: Unable to create thread " << rcCloud << std::endl; exit (-1); }
+  pthread_t cloudThread;
+  int rcCloud = pthread_create (&cloudThread, NULL, &Cloud::run, (void *) cloud);
+  if (rcCloud) { std::cout << "Error: Unable to create thread " << rcCloud << std::endl; exit (-1); }
 
-	void *status;
-	rcCloud = pthread_join (cloudThread, &status);
-	if (rcCloud) { std::cout << "Error: Unable to join thread " << rcCloud << std::endl; exit(-1); }
+  void *status;
+  rcCloud = pthread_join (cloudThread, &status);
+  if (rcCloud) { std::cout << "Error: Unable to join thread " << rcCloud << std::endl; exit(-1); }
 
-	return 0;
+  return 0;
 }
 
